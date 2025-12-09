@@ -1,0 +1,61 @@
+# -------------------------
+# PYTHON / VENV
+# -------------------------
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# -------------------------
+# IDE / OS
+# -------------------------
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# -------------------------
+# BUILD / DIST / CACHE
+# -------------------------
+build/
+dist/
+*.egg-info/
+.cache/
+logs/
+debug/
+tmp/
+
+# -------------------------
+# DATA (REPLAY / MARKET / CACHE)
+# -------------------------
+data/
+datasets/
+*.parquet
+*.pkl
+*.db
+*.sqlite
+
+# -------------------------
+# UI ASSETS (BIG)
+# -------------------------
+*.dll
+*.so
+*.dylib
+
+# -------------------------
+# IBKR / TWS Logs
+# -------------------------
+tws.log
+ibgateway/
+Jts/
+
+# -------------------------
+# SECURITY
+# -------------------------
+*.key
+*.pem
+*.crt
+configs/local/*

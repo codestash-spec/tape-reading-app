@@ -26,17 +26,17 @@ flowchart LR
 ```mermaid
 flowchart LR
     Providers --> Bus[EventBus]
-    Bus --> Engines[Engines (DOM/Delta/Tape/Footprint)]
-    Engines --> UI[UI Panels]
-    Engines --> Exec[Execution/Risk]
+    Bus --> Engines["Engines (DOM/Delta/Tape/Footprint)"]
+    Engines --> UI["UI Panels"]
+    Engines --> Exec["Execution/Risk"]
 ```
 
 ## DOM Engine processing
 ```mermaid
 flowchart LR
-    Delta[DOM deltas (MarketEvent.dom_delta)] --> State[DOM Engine state store]
-    State --> Ladder[DOM ladder snapshot]
-    Ladder --> Outputs[UI panels / replay snapshots]
+    Delta["DOM deltas (MarketEvent.dom_delta)"] --> State["DOM Engine state store"]
+    State --> Ladder["DOM ladder snapshot"]
+    Ladder --> Outputs["UI panels / replay snapshots"]
 ```
 
 ## DOM Engine placeholder (future)
@@ -76,19 +76,19 @@ flowchart LR
         Hist[Historical Replay]
     end
     subgraph Core
-        Norm[Normalization (MarketEvent)]
+        Norm[Normalization]
         EB[EventBus]
     end
     subgraph Engines
-        DOM[DOM Engine]
-        DELTA[Delta Engine]
-        TAPE[Tape/Footprint]
-        PAT[Patterns/ML]
+        DOM["DOM Engine"]
+        DELTA["Delta Engine"]
+        TAPE["Tape / Footprint"]
+        PAT["Patterns / ML"]
     end
     subgraph Execution
-        MT5[MT5 Adapter]
-        IBX[IBKR Orders]
-        RISK[Risk Engine]
+        MT5["MT5 Adapter"]
+        IBX["IBKR Orders"]
+        RISK["Risk Engine"]
     end
     Providers --> Norm --> EB --> Engines --> Execution
     EB --> UI[UI Panels]

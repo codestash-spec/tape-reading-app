@@ -37,7 +37,7 @@ Event-driven data plane centered on a normalized `MarketEvent` contract and a li
 ### Event flow: IBKR -> EventBus -> Engines
 ```mermaid
 flowchart LR
-    Raw[IBKR raw callbacks] --> Norm[ibkr_events<br/>normalize to MarketEvent]
+    Raw[IBKR raw callbacks] --> Norm["ibkr_events normalize MarketEvent"]
     Norm --> Bus[EventBus]
     Bus --> DOM[DOM Engine]
     Bus --> Delta[Delta Engine]
@@ -52,7 +52,7 @@ flowchart LR
 flowchart LR
     Files[CSV/JSON datasets] --> Loader[HistoricalLoader]
     Loader --> Bus[EventBus.publish]
-    Bus --> Engines[Engines/UI subscribers]
+    Bus --> Engines["Engines/UI subscribers"]
 ```
 
 ### High-level system diagram
@@ -64,19 +64,19 @@ flowchart LR
         Hist[Historical Replay]
     end
     subgraph Core
-        Norm[Normalization (MarketEvent)]
+        Norm[Normalization]
         EB[EventBus]
     end
     subgraph Engines
-        DOM[DOM Engine]
-        DELTA[Delta Engine]
-        TAPE[Tape/Footprint]
-        PAT[Patterns/ML]
+        DOM["DOM Engine"]
+        DELTA["Delta Engine"]
+        TAPE["Tape / Footprint"]
+        PAT["Patterns / ML"]
     end
     subgraph Execution
-        MT5[MT5 Adapter]
-        IBX[IBKR Orders]
-        RISK[Risk Engine]
+        MT5["MT5 Adapter"]
+        IBX["IBKR Orders"]
+        RISK["Risk Engine"]
     end
     Providers --> Norm --> EB --> Engines --> Execution
     EB --> UI[UI Panels]

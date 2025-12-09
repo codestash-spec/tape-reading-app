@@ -1,98 +1,102 @@
-import threading
+from __future__ import annotations
+
+import logging
 import queue
-import traceback
-from typing import Callable, Dict, List, Any
+import threading
+from collections import defaultdict
+from typing import Callable, DefaultDict, List, Optional
 
+from models.market_event import MarketEvent
 
-class Event:
-    """
-    Base event class.
-    Every event must contain:
-        - type: str  -> used for routing
-        - payload: dict or any
-    """
-    def __init__(self, event_type: str, payload: Any):
-        self.type = event_type
-        self.payload = payload
+Callback = Callable[[MarketEvent], None]
 
 
 class EventBus:
     """
-    High-performance event bus for institutional-grade apps.
-    
-    Features:
-    - Thread-safe publish/subscribe
-    - Internal queue (non-blocking)
-    - Worker thread dispatch loop
-    - Per-event-type subscriptions
+    Thread-safe event bus with a single dispatch worker.
+
+    - Non-blocking publish (queue-backed)
+    - Per-event-type subscription
+    - Safe shutdown that drains the queue
     """
 
-    def __init__(self):
-        self.subscribers: Dict[str, List[Callable]] = {}
-        self.queue = queue.Queue()
-        self.running = True
+    def __init__(self) -> None:
+        self._subscribers: DefaultDict[str, List[Callback]] = defaultdict(list)
+        self._queue: queue.Queue[Optional[MarketEvent]] = queue.Queue()
+        self._lock = threading.RLock()
+        self._running = threading.Event()
+        self._running.set()
 
-        self.worker = threading.Thread(target=self._dispatch_loop, daemon=True)
-        self.worker.start()
+        self._worker = threading.Thread(target=self._dispatch_loop, daemon=True)
+        self._worker.start()
 
     # --------------------------------------------------------
     # SUBSCRIBE
     # --------------------------------------------------------
-    def subscribe(self, event_type: str, callback: Callable):
+    def subscribe(self, event_type: str, callback: Callback) -> None:
         """
         Register a callback for a specific event type.
         """
-        if event_type not in self.subscribers:
-            self.subscribers[event_type] = []
-        self.subscribers[event_type].append(callback)
+        with self._lock:
+            self._subscribers[event_type].append(callback)
 
     # --------------------------------------------------------
     # PUBLISH
     # --------------------------------------------------------
-    def publish(self, event: Event):
+    def publish(self, event: MarketEvent) -> None:
         """
-        Add an event to the queue.
-        Non-blocking.
+        Add an event to the queue (non-blocking).
         """
-        self.queue.put(event)
+        if not self._running.is_set():
+            logging.getLogger(__name__).warning("EventBus.publish called after stop(). Event dropped.")
+            return
+        self._queue.put_nowait(event)
 
     # --------------------------------------------------------
     # MAIN LOOP
     # --------------------------------------------------------
-    def _dispatch_loop(self):
+    def _dispatch_loop(self) -> None:
         """
         Internal worker thread that processes events.
         """
-        while self.running:
+        log = logging.getLogger(__name__)
+
+        while self._running.is_set() or not self._queue.empty():
             try:
-                event = self.queue.get()
-                if event is None:
-                    continue
+                event = self._queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
 
-                # No subscribers for this event type
-                if event.type not in self.subscribers:
-                    continue
+            if event is None:
+                continue
 
-                # Dispatch to all subscribers
-                for callback in self.subscribers[event.type]:
-                    try:
-                        callback(event)
-                    except Exception:
-                        # We NEVER allow a callback failure to kill the bus
-                        print("[EventBus] Error in callback:")
-                        traceback.print_exc()
+            event_type = getattr(event, "event_type", None) or getattr(event, "type", None)
+            if not event_type:
+                log.error("Discarding event without type: %s", event)
+                continue
 
-            except Exception:
-                print("[EventBus] Fatal error in dispatch loop:")
-                traceback.print_exc()
+            with self._lock:
+                callbacks = list(self._subscribers.get(event_type, []))
+
+            if not callbacks:
+                continue
+
+            for callback in callbacks:
+                try:
+                    callback(event)
+                except Exception:
+                    log.exception("Error in callback for event_type=%s", event_type)
 
     # --------------------------------------------------------
     # SHUTDOWN
     # --------------------------------------------------------
-    def stop(self):
+    def stop(self, timeout: float = 1.0) -> None:
         """
-        Stop the event bus safely.
+        Stop the event bus safely and wait for the worker to drain.
         """
-        self.running = False
-        self.queue.put(None)
-        self.worker.join()
+        if not self._running.is_set():
+            return
+
+        self._running.clear()
+        self._queue.put(None)
+        self._worker.join(timeout=timeout)

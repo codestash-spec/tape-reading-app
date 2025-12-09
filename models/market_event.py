@@ -1,29 +1,41 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Any, Dict
+
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class MarketEvent(BaseModel):
     """
-    Universal market event model.
-    Standardizes all incoming data into a single schema.
+    Canonical market event used across the system.
 
-    Providers map their native events (IBKR, dxFeed, Rithmic)
-    into this normalized structure before publishing to the EventBus.
-
-    This guarantees that all engines (DOM, Delta, Footprint, Tape)
-    can operate with a unified, predictable schema.
+    Providers normalize raw callbacks to this schema before publishing
+    to the EventBus so engines can consume a predictable event contract.
     """
 
-    type: str = Field(..., description="Event type: tick, dom, trade, footprint, delta, etc.")
-    timestamp: datetime = Field(..., description="Event timestamp in UTC")
-    source: str = Field(..., description="Provider identifier: ibkr, dxfeed, rithmic, replay")
-
-    payload: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Provider-specific structured payload"
+    model_config = ConfigDict(
+        populate_by_name=True,
+        validate_assignment=True,
+        frozen=True,
+        extra="ignore",
     )
 
-    class Config:
-        validate_assignment = True
-        frozen = True  # Events are immutable → safer & faster
+    event_type: str = Field(
+        ...,
+        description="Normalized event type: tick, dom_delta, trade, footprint, delta, etc.",
+        validation_alias=AliasChoices("event_type", "type"),
+    )
+    timestamp: datetime = Field(
+        ...,
+        description="Event timestamp in UTC",
+        validation_alias=AliasChoices("timestamp", "ts"),
+    )
+    source: str = Field(..., description="Provider identifier: ibkr, dxfeed, rithmic, replay")
+    symbol: str = Field(..., description="Instrument identifier, e.g. ES, XAUUSD, EURUSD")
+    payload: Dict[str, Any] = Field(default_factory=dict, description="Structured payload body")
+
+    @property
+    def type(self) -> str:
+        """Compatibility alias used by legacy code/tests."""
+        return self.event_type

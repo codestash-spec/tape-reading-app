@@ -3,3 +3,4 @@ pyside6==6.6.1
 ibapi==9.81.1.post1
 pyyaml
 loguru
+pytest

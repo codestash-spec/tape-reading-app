@@ -24,6 +24,7 @@ build/
 dist/
 *.egg-info/
 .cache/
+.pytest_cache/
 logs/
 debug/
 tmp/

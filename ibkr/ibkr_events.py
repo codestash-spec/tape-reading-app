@@ -1,18 +1,3 @@
-"""
-ibkr_events.py
-
-Camada de normalização de eventos da IBKR para o modelo institucional de MarketEvent.
-
-Responsabilidades:
-- Traduzir callbacks brutos da IBAPI (tick-by-tick, DOM, trades).
-- Normalizar dados em estruturas universais (tick, trade, DOM).
-- Construir objetos MarketEvent compatíveis com o EventBus.
-- Manter uma interface clara e estável para o ibkr_connector.py.
-
-Este módulo **não** depende de threads, sockets ou UI. É puramente funcional:
-input = dados IBKR, output = MarketEvent pronto a ser publicado.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -21,25 +6,18 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# Importa o modelo universal de evento já existente no projeto.
-# ❗ Import mínimo para não acoplar demais.
-from models.market_event import MarketEvent  # type: ignore[import]
+from models.market_event import MarketEvent
 
 
 # =============================================================================
-#  CONFIGURAÇÃO DE MAPEAMENTO PARA MarketEvent
+#  CONFIGURATION FOR MarketEvent ADAPTATION
 # =============================================================================
 
 
 class MarketEventMapping(BaseModel):
     """
-    Adapta este módulo ao schema real de MarketEvent sem alterar código.
-
-    Ajusta estes campos se o teu MarketEvent tiver nomes diferentes, por exemplo:
-      - "provider" em vez de "source"
-      - "instrument" em vez de "symbol"
-      - "timestamp" em vez de "ts"
-      - "data" em vez de "payload"
+    Adapts this module to the actual MarketEvent schema without scattering
+    string literals across the codebase.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -47,10 +25,9 @@ class MarketEventMapping(BaseModel):
     source_field: str = "source"
     symbol_field: str = "symbol"
     type_field: str = "event_type"
-    ts_field: str = "ts"
+    ts_field: str = "timestamp"
     payload_field: str = "payload"
 
-    # Valor fixo para identificar o provider
     source_value: str = "ibkr"
 
 
@@ -65,10 +42,7 @@ def _build_market_event(
     payload: Mapping[str, Any],
 ) -> MarketEvent:
     """
-    Constrói um MarketEvent usando o esquema de fields configurável.
-
-    Isto garante compatibilidade mesmo que o MarketEvent mude de assinatura,
-    bastando ajustar o MarketEventMapping acima.
+    Build a MarketEvent using the configured field names.
     """
     cfg = MARKET_EVENT_MAPPING
 
@@ -84,17 +58,17 @@ def _build_market_event(
 
 
 # =============================================================================
-#  ENUMS / TIPOS UNIVERSAIS
+#  ENUMS / TYPES
 # =============================================================================
 
 
 class EventKind(str, Enum):
-    """Tipos universais de eventos que saem deste módulo."""
+    """Universal event kinds leaving this module."""
 
-    TICK = "tick"          # bid/ask atualizado, mid, spread
-    TRADE = "trade"        # negócio/time & sales
-    DOM_DELTA = "dom_delta"  # atualização incremental do livro
-    DOM_SNAPSHOT = "dom_snapshot"  # snapshot completo (opcional / futuro)
+    TICK = "tick"
+    TRADE = "trade"
+    DOM_DELTA = "dom_delta"
+    DOM_SNAPSHOT = "dom_snapshot"
 
 
 class DOMSide(str, Enum):
@@ -103,10 +77,8 @@ class DOMSide(str, Enum):
 
     @staticmethod
     def from_ib_side(side: int) -> "DOMSide":
-        # IB API → 0 = ask, 1 = bid
-        if side == 1:
-            return DOMSide.BID
-        return DOMSide.ASK
+        # IB API: 0 = ask, 1 = bid
+        return DOMSide.BID if side == 1 else DOMSide.ASK
 
 
 class DOMOperation(str, Enum):
@@ -116,7 +88,7 @@ class DOMOperation(str, Enum):
 
     @staticmethod
     def from_ib_op(op: int) -> "DOMOperation":
-        # IB API → 0 = insert, 1 = update, 2 = delete
+        # IB API: 0 = insert, 1 = update, 2 = delete
         if op == 0:
             return DOMOperation.INSERT
         if op == 1:
@@ -125,7 +97,7 @@ class DOMOperation(str, Enum):
 
 
 class AggressorSide(str, Enum):
-    """Lado agressor do negócio (para delta/footprint)."""
+    """Aggressor side of a trade, useful for delta/footprint engines."""
 
     BUY = "buy"
     SELL = "sell"
@@ -133,16 +105,12 @@ class AggressorSide(str, Enum):
 
 
 # =============================================================================
-#  MODELOS NORMALIZADOS (Pydantic v2, imutáveis)
+#  NORMALIZED MODELS (Pydantic v2, immutable)
 # =============================================================================
 
 
 class NormalizedTick(BaseModel):
-    """
-    Tick normalizado (bid/ask) para todos os engines.
-
-    Pode ser criado tanto a partir de tick-by-tick bid/ask como de snapshots.
-    """
+    """Normalized tick (bid/ask/last) consumed by engines."""
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -160,7 +128,6 @@ class NormalizedTick(BaseModel):
     mid: Optional[float] = None
     spread: Optional[float] = None
 
-    # Campo raw opcional para debug/telemetria
     raw: Optional[Dict[str, Any]] = None
 
     @staticmethod
@@ -208,10 +175,9 @@ class NormalizedTick(BaseModel):
         symbol: str,
         ts: datetime,
         last: float,
-        last_size: float,
+        last_size: Optional[float],
         raw: Optional[Dict[str, Any]] = None,
     ) -> "NormalizedTick":
-        # Versão minimalista quando só temos last/last_size
         return cls(
             symbol=symbol,
             ts=ts,
@@ -222,11 +188,7 @@ class NormalizedTick(BaseModel):
 
 
 class NormalizedTrade(BaseModel):
-    """
-    Negócio (trade) normalizado, ideal para Delta/Footprint.
-
-    Normaliza time & sales da IB (tickByTickAllLast) num formato único.
-    """
+    """Normalized trade for Delta/Footprint engines."""
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -243,11 +205,7 @@ class NormalizedTrade(BaseModel):
 
 
 class DOMLevel(BaseModel):
-    """
-    Nível do livro (DOM Level).
-
-    Usado tanto para snapshots como para reconstrução incremental no DOM Engine.
-    """
+    """DOM level used for snapshots."""
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -255,7 +213,7 @@ class DOMLevel(BaseModel):
     ts: datetime
 
     side: DOMSide
-    level: int  # posição no livro, 0 = melhor preço
+    level: int  # position in the book, 0 = best price
     price: float
     size: float
 
@@ -266,11 +224,7 @@ class DOMLevel(BaseModel):
 
 
 class DOMDelta(BaseModel):
-    """
-    Atualização incremental do livro (DOM).
-
-    Representa o que veio num único callback updateMktDepth/UpdateMktDepthL2.
-    """
+    """Incremental DOM update (from updateMktDepth/UpdateMktDepthL2)."""
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -291,11 +245,7 @@ class DOMDelta(BaseModel):
 
 
 class DOMSnapshot(BaseModel):
-    """
-    Snapshot completo do livro (bids/asks).
-
-    Pode ser usado num futuro "replay" ou como estado inicial para o DOM Engine.
-    """
+    """Full DOM snapshot (bids/asks)."""
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -309,19 +259,8 @@ class DOMSnapshot(BaseModel):
 
 
 # =============================================================================
-#  BUILDERS PÚBLICOS → IBKR RAW → MarketEvent
+#  BUILDERS: IBKR RAW -> MarketEvent
 # =============================================================================
-#
-# Estes são os métodos que o ibkr_connector.py deve usar diretamente,
-# idealmente mapeando 1:1 com callbacks da IBAPI.
-#
-# Cada função devolve **um único** MarketEvent universal.
-# =============================================================================
-
-
-# ----------------------------
-#  TICK BY TICK BID/ASK
-# ----------------------------
 
 
 def build_tick_from_bid_ask(
@@ -335,10 +274,7 @@ def build_tick_from_bid_ask(
     raw: Optional[Dict[str, Any]] = None,
 ) -> MarketEvent:
     """
-    Constrói um MarketEvent de tipo 'tick' a partir de tick-by-tick bid/ask da IB.
-
-    Ideal para mapear diretamente de:
-      tickByTickBidAsk(reqId, time, bidPrice, askPrice, bidSize, askSize, bidAttribs, askAttribs)
+    Build a 'tick' MarketEvent from tick-by-tick bid/ask.
     """
     ts = datetime.fromtimestamp(float(time), tz=timezone.utc)
 
@@ -360,11 +296,6 @@ def build_tick_from_bid_ask(
     )
 
 
-# ----------------------------
-#  TICK BY TICK LAST TRADE
-# ----------------------------
-
-
 def build_trade_from_last(
     *,
     symbol: str,
@@ -377,13 +308,7 @@ def build_trade_from_last(
     raw: Optional[Dict[str, Any]] = None,
 ) -> MarketEvent:
     """
-    Constrói um MarketEvent de tipo 'trade'.
-
-    Para mapear:
-      tickByTickAllLast(reqId, tickType, time, price, size, tickAttribLast, exchange, specialConditions)
-
-    O lado agressor pode ser inferido externamente (p.ex. via comparação com mid)
-    e passado aqui, ou mantido como UNKNOWN.
+    Build a 'trade' MarketEvent from tickByTickAllLast.
     """
     ts = datetime.fromtimestamp(float(time), tz=timezone.utc)
 
@@ -406,23 +331,16 @@ def build_trade_from_last(
     )
 
 
-# ----------------------------
-#  TICKS SIMPLIFICADOS (LAST ONLY)
-# ----------------------------
-
-
 def build_tick_from_last(
     *,
     symbol: str,
     time: int | float,
     last_price: float,
-    last_size: float,
+    last_size: Optional[float],
     raw: Optional[Dict[str, Any]] = None,
 ) -> MarketEvent:
     """
-    Constrói um evento 'tick' minimalista quando só tens last/last_size.
-
-    Útil para FX/CFD onde não tens DOM completo, mas queres manter formato único.
+    Build a minimalist 'tick' event when only last/size is available.
     """
     ts = datetime.fromtimestamp(float(time), tz=timezone.utc)
 
@@ -442,11 +360,6 @@ def build_tick_from_last(
     )
 
 
-# ----------------------------
-#  DOM DELTA (updateMktDepth / L2)
-# ----------------------------
-
-
 def build_dom_delta_from_l2(
     *,
     symbol: str,
@@ -461,18 +374,9 @@ def build_dom_delta_from_l2(
     raw: Optional[Dict[str, Any]] = None,
 ) -> MarketEvent:
     """
-    Constrói um MarketEvent de tipo 'dom_delta' a partir de updateMktDepthL2.
-
-    IB API:
-      updateMktDepthL2(
-        reqId, position, marketMaker, operation,
-        side, price, size, isSmartDepth
-      )
+    Build a 'dom_delta' MarketEvent from updateMktDepthL2.
     """
-    if time is None:
-        ts = datetime.now(timezone.utc)
-    else:
-        ts = datetime.fromtimestamp(float(time), tz=timezone.utc)
+    ts = datetime.fromtimestamp(float(time), tz=timezone.utc) if time is not None else datetime.now(timezone.utc)
 
     dom_delta = DOMDelta(
         symbol=symbol,
@@ -495,11 +399,6 @@ def build_dom_delta_from_l2(
     )
 
 
-# ----------------------------
-#  DOM SNAPSHOT (OPCIONAL / FUTURO)
-# ----------------------------
-
-
 def build_dom_snapshot(
     *,
     symbol: str,
@@ -509,15 +408,7 @@ def build_dom_snapshot(
     raw: Optional[Dict[str, Any]] = None,
 ) -> MarketEvent:
     """
-    Constrói um MarketEvent de tipo 'dom_snapshot'.
-
-    Este método não é usado diretamente pela IBAPI (não há snapshot nativo),
-    mas serve para:
-      - Reconstruções de replay.
-      - Consulta do estado atual do DOM Engine se exposto como evento.
-
-    O ibkr_connector pode, no futuro, emitir snapshots periódicos
-    construídos a partir de um estado interno do DOM.
+    Build a 'dom_snapshot' MarketEvent.
     """
     ts_final = ts or datetime.now(timezone.utc)
 
@@ -538,7 +429,7 @@ def build_dom_snapshot(
 
 
 # =============================================================================
-#  HELPERS DE ALTO NÍVEL (OPCIONAIS)
+#  IBKR-SPECIFIC CONVENIENCE BUILDERS
 # =============================================================================
 
 
@@ -550,18 +441,13 @@ def build_from_ib_tick_by_tick_bid_ask(
     ask_price: float,
     bid_size: float,
     ask_size: float,
-    bid_attribs: Any,
-    ask_attribs: Any,
+    tick_attribs: Any,
 ) -> MarketEvent:
     """
-    Conveniência para usar diretamente dentro do callback IBAPI
-    tickByTickBidAsk.
-
-    Mantém os atributos brutos em `raw` para debug.
+    Convenience helper for IBAPI tickByTickBidAsk callback.
     """
     raw = {
-        "bid_attribs": repr(bid_attribs),
-        "ask_attribs": repr(ask_attribs),
+        "tick_attribs": repr(tick_attribs),
     }
 
     return build_tick_from_bid_ask(
@@ -587,11 +473,7 @@ def build_from_ib_tick_by_tick_all_last(
     aggressor: AggressorSide = AggressorSide.UNKNOWN,
 ) -> MarketEvent:
     """
-    Conveniência para usar diretamente dentro do callback IBAPI
-    tickByTickAllLast.
-
-    `aggressor` pode ser inferido externamente e passado aqui, ou
-    ficar UNKNOWN.
+    Convenience helper for IBAPI tickByTickAllLast callback.
     """
     raw = {
         "tick_attrib_last": repr(tick_attrib_last),
@@ -622,11 +504,7 @@ def build_from_ib_update_mkt_depth_l2(
     time: Optional[int | float] = None,
 ) -> MarketEvent:
     """
-    Conveniência para usar diretamente dentro do callback IBAPI
-    updateMktDepthL2.
-
-    O campo `time` pode ser controlado externamente (p.ex. vindo de um
-    clock monotónico) ou deixado como None para usar now().
+    Convenience helper for IBAPI updateMktDepthL2 callback.
     """
     raw = {
         "market_maker": market_maker,
@@ -643,4 +521,59 @@ def build_from_ib_update_mkt_depth_l2(
         size=size,
         is_smart_depth=is_smart_depth,
         raw=raw,
+    )
+
+
+def build_from_ib_l1_tick(
+    *,
+    symbol: str,
+    tick_type: int,
+    price: float,
+    size: Optional[float] = None,
+    time: Optional[int | float] = None,
+    raw: Optional[Dict[str, Any]] = None,
+) -> MarketEvent:
+    """
+    Build a 'tick' event from legacy Level 1 callbacks (tickPrice/tickSize).
+
+    tick_type follows IB TickType enums. Only a subset is handled explicitly.
+    """
+    ts = datetime.fromtimestamp(float(time), tz=timezone.utc) if time is not None else datetime.now(timezone.utc)
+    raw_payload = raw or {}
+    raw_payload["tick_type"] = tick_type
+
+    bid = ask = None
+    bid_size = ask_size = None
+    last = last_size = None
+
+    if tick_type == 1:  # bid price
+        bid = price
+    elif tick_type == 2:  # ask price
+        ask = price
+    elif tick_type == 4:  # last price
+        last = price
+        last_size = size
+    else:
+        last = price
+        last_size = size
+
+    tick = NormalizedTick(
+        symbol=symbol,
+        ts=ts,
+        bid=bid,
+        ask=ask,
+        bid_size=bid_size,
+        ask_size=ask_size,
+        last=last,
+        last_size=last_size,
+        mid=NormalizedTick.compute_mid(bid, ask),
+        spread=NormalizedTick.compute_spread(bid, ask),
+        raw=raw_payload,
+    )
+
+    return _build_market_event(
+        kind=EventKind.TICK.value,
+        symbol=symbol,
+        ts=ts,
+        payload=tick.model_dump(),
     )

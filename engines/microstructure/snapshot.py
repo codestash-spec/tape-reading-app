@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class MicrostructureSnapshot:
     """
     Aggregated microstructure view combining DOM, tape, delta and footprint signals.

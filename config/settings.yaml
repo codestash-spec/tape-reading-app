@@ -19,3 +19,7 @@ risk:
   collar_bps: 50
 replay:
   speed: 1.0
+ui:
+  theme: dark
+  layout_profile: default
+  mode: sim

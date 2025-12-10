@@ -19,6 +19,7 @@ class Settings:
     execution: Dict[str, Any]
     telemetry: Dict[str, Any]
     replay: Dict[str, Any]
+    ui: Dict[str, Any]
 
 
 def _load_yaml(path: str) -> Dict[str, Any]:
@@ -52,6 +53,7 @@ def load_settings(base_path: str = "config/settings.yaml") -> Settings:
     execution = base.get("execution", {})
     telemetry = base.get("telemetry", {})
     replay = base.get("replay", {})
+    ui = base.get("ui", {})
 
     return Settings(
         env=env,
@@ -64,4 +66,5 @@ def load_settings(base_path: str = "config/settings.yaml") -> Settings:
         execution=execution,
         telemetry=telemetry,
         replay=replay,
+        ui=ui,
     )

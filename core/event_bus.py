@@ -4,7 +4,7 @@ import logging
 import queue
 import threading
 from collections import defaultdict
-from typing import Callable, DefaultDict, List, Optional
+from typing import Callable, DefaultDict, Dict, Iterable, List, Optional
 
 from models.market_event import MarketEvent
 
@@ -16,13 +16,13 @@ class EventBus:
     Thread-safe event bus with a single dispatch worker.
 
     - Non-blocking publish (queue-backed)
-    - Per-event-type subscription
+    - Per-event-type subscription with optional wildcard "*"
     - Safe shutdown that drains the queue
     """
 
-    def __init__(self) -> None:
+    def __init__(self, queue_maxsize: int = 0) -> None:
         self._subscribers: DefaultDict[str, List[Callback]] = defaultdict(list)
-        self._queue: queue.Queue[Optional[MarketEvent]] = queue.Queue()
+        self._queue: queue.Queue[Optional[MarketEvent]] = queue.Queue(maxsize=queue_maxsize)
         self._lock = threading.RLock()
         self._running = threading.Event()
         self._running.set()
@@ -33,12 +33,17 @@ class EventBus:
     # --------------------------------------------------------
     # SUBSCRIBE
     # --------------------------------------------------------
-    def subscribe(self, event_type: str, callback: Callback) -> None:
+    def subscribe(self, event_type: str | Iterable[str], callback: Callback) -> None:
         """
-        Register a callback for a specific event type.
+        Register a callback for one or more event types.
+        Supports "*" wildcard for all events.
         """
         with self._lock:
-            self._subscribers[event_type].append(callback)
+            if isinstance(event_type, str):
+                self._subscribers[event_type].append(callback)
+            else:
+                for et in event_type:
+                    self._subscribers[et].append(callback)
 
     # --------------------------------------------------------
     # PUBLISH
@@ -76,7 +81,7 @@ class EventBus:
                 continue
 
             with self._lock:
-                callbacks = list(self._subscribers.get(event_type, []))
+                callbacks = list(self._subscribers.get(event_type, [])) + list(self._subscribers.get("*", []))
 
             if not callbacks:
                 continue

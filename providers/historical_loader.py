@@ -4,7 +4,7 @@ import csv
 import json
 import time
 from datetime import datetime, timezone
-from typing import Callable, Iterable, List, Optional
+from typing import Callable, List, Optional
 
 from core.event_bus import EventBus
 from models.market_event import MarketEvent

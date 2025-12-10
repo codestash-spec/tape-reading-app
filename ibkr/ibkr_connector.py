@@ -48,7 +48,11 @@ class IBKRConnector(EWrapper, EClient):
         self.connected_ok = False
 
         log.info("[IBKR] Connecting to IB Gateway %s:%s (client_id=%s)...", host, port, client_id)
-        self.connect(host, port, client_id)
+        try:
+            self.connect(host, port, client_id)
+        except Exception as exc:  # pragma: no cover - external dependency
+            log.error("[IBKR] Connection failed: %s", exc)
+            return
 
         self._thread = threading.Thread(target=self.run, daemon=True)
         self._thread.start()
@@ -74,7 +78,7 @@ class IBKRConnector(EWrapper, EClient):
     # ------------------------------------------------------------
 
     def _subscribe_all(self) -> None:
-        if not self.isConnected():
+        if not self.isConnected():  # pragma: no cover - network guard
             log.warning("[IBKR] Not connected; skipping subscriptions.")
             return
 
@@ -100,7 +104,10 @@ class IBKRConnector(EWrapper, EClient):
         # 3) Fallback to Level 1 if tick-by-tick failed
         if not self.tick_by_tick_supported:
             log.info("[IBKR] Switching to Level 1 mode (reqMktData).")
-            self.reqMktData(3001, contract, "", False, False, [])
+            try:
+                self.reqMktData(3001, contract, "", False, False, [])
+            except Exception as exc:  # pragma: no cover - defensive
+                log.warning("[IBKR] Level1 subscription error: %s", exc)
 
     # ------------------------------------------------------------
     # TICK-BY-TICK CALLBACKS
@@ -115,7 +122,7 @@ class IBKRConnector(EWrapper, EClient):
         bidSize: float,
         askSize: float,
         attrib: TickAttribBidAsk,
-    ) -> None:
+    ) -> None:  # pragma: no cover - requires IBKR
         if not self.tick_by_tick_supported:
             return
         evt = build_from_ib_tick_by_tick_bid_ask(
@@ -139,7 +146,7 @@ class IBKRConnector(EWrapper, EClient):
         attrib: TickAttribLast,
         exchange: Optional[str],
         specialConditions: Optional[str],
-    ) -> None:
+    ) -> None:  # pragma: no cover - requires IBKR
         if not self.tick_by_tick_supported:
             return
         evt = build_from_ib_tick_by_tick_all_last(
@@ -187,7 +194,7 @@ class IBKRConnector(EWrapper, EClient):
         price: float,
         size: float,
         isSmartDepth: bool,
-    ) -> None:
+    ) -> None:  # pragma: no cover - requires IBKR
         evt = build_dom_delta_from_l2(
             symbol=self.symbol,
             side=side,
@@ -205,10 +212,10 @@ class IBKRConnector(EWrapper, EClient):
     # CONNECTION EVENTS
     # ------------------------------------------------------------
 
-    def nextValidId(self, orderId: int) -> None:
+    def nextValidId(self, orderId: int) -> None:  # pragma: no cover - IBKR callback
         log.info("[IBKR] API connection established.")
 
-    def connectionClosed(self) -> None:
+    def connectionClosed(self) -> None:  # pragma: no cover - IBKR callback
         log.warning("[IBKR] Connection closed by IBKR.")
         self.connected_ok = False
 
@@ -223,5 +230,5 @@ class IBKRConnector(EWrapper, EClient):
         try:
             self.disconnect()
         finally:
-            if self._thread.is_alive():
+            if hasattr(self, "_thread") and self._thread.is_alive():
                 self._thread.join(timeout=timeout)

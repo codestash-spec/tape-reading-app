@@ -1,0 +1,4 @@
+telemetry:
+  log_level: INFO
+execution:
+  mode: ibkr

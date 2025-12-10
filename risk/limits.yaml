@@ -1,0 +1,7 @@
+symbols:
+  - XAUUSD
+  - EURUSD
+max_size: 1000000
+max_exposure: 2000000
+throttle_max: 50
+collar_bps: 50

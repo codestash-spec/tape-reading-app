@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
@@ -9,9 +9,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 class MarketEvent(BaseModel):
     """
     Canonical market event used across the system.
-
-    Providers normalize raw callbacks to this schema before publishing
-    to the EventBus so engines can consume a predictable event contract.
+    Immutable, alias-friendly, suitable for serialization.
     """
 
     model_config = ConfigDict(
@@ -31,9 +29,11 @@ class MarketEvent(BaseModel):
         description="Event timestamp in UTC",
         validation_alias=AliasChoices("timestamp", "ts"),
     )
-    source: str = Field(..., description="Provider identifier: ibkr, dxfeed, rithmic, replay")
+    source: str = Field(..., description="Provider identifier: ibkr, dxfeed, rithmic, replay, strategy, risk, exec")
     symbol: str = Field(..., description="Instrument identifier, e.g. ES, XAUUSD, EURUSD")
     payload: Dict[str, Any] = Field(default_factory=dict, description="Structured payload body")
+    trace_id: Optional[str] = Field(default=None, description="Trace correlation id")
+    span_id: Optional[str] = Field(default=None, description="Span correlation id")
 
     @property
     def type(self) -> str:

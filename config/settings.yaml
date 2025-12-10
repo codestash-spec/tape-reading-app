@@ -1,0 +1,21 @@
+env: dev
+symbols:
+  - XAUUSD
+providers:
+  ibkr:
+    host: 127.0.0.1
+    port: 7497
+    client_id: 1
+telemetry:
+  log_level: INFO
+execution:
+  mode: sim
+  slippage_bps: 0
+risk:
+  symbols: ["XAUUSD", "EURUSD"]
+  max_size: 1000000
+  max_exposure: 2000000
+  throttle_max: 50
+  collar_bps: 50
+replay:
+  speed: 1.0

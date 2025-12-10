@@ -1,0 +1,4 @@
+telemetry:
+  log_level: DEBUG
+execution:
+  mode: sim

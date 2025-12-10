@@ -5,17 +5,22 @@
 - **PHASE_II.md** — Provedores, normalização IBKR, replay.
 - **PHASE_III.md** — Engines DOM/Delta/Tape/Footprint, estratégia, risco, execução, telemetria, config.
 - **PHASE_IV.md** — Plano de UI institucional e observabilidade.
+- **ADVANCED_ROADMAP.md** — Roteiro avançado (orderflow pro, multi-broker, feeds, ML, risco, deploy, governança).
 - **SYSTEM_ARCHITECTURE.md** — Arquitetura completa do sistema.
 - **MARKET_DATA_ENGINE.md** — Ingestão IBKR, normalização, replay.
 - **STRATEGY_ENGINE.md** — Estratégia event-driven e sinais.
 - **RISK_ENGINE.md** — Regras pré-trade e kill-switch.
 - **EXECUTION_ENGINE.md** — Roteamento e adaptadores sim/IBKR.
 - **EXECUTION_PIPELINE.md** — Ciclo de vida da ordem e integração com EventBus.
+- **FEEDS_AND_BROKERS.md** — Abstração de feeds e execução multi-broker, integração dxFeed/Rithmic.
 - **TELEMETRY_LOGGING.md** — Logging JSON, métricas, tracing, auditoria.
 - **CONFIGURATION_REFERENCE.md** — Referência de configuração e perfis.
 - **GOVERNANCE_SECURITY.md** — Segredos, papéis, releases, incidentes.
 - **DEVELOPER_GUIDE.md** — Ambiente, testes, estilo, fluxo de trabalho.
 - **OPERATIONS_RUNBOOK.md** — Operação sim/live/replay, kill-switch, recuperação.
+- **CHECKLISTS.md** — Checklists operacionais, risco, deploy, segurança, replay, ML.
+- **GLOSSARY.md** — Glossário institucional de microestrutura e execução.
+- **ML_PIPELINES.md** — Modelos de microestrutura, features, datasets e treinamento.
 - **DIAGRAMS.md** — Diagramas Mermaid centralizados (arquitetura, pipeline, sinais, execução, risco, falhas).
 - **README.md** — Visão geral do repositório e instruções rápidas.
 - **ROADMAP.md** — Fases e milestones.

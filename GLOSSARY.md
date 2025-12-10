@@ -1,0 +1,25 @@
+# GLOSSARY.md — Glossário Institucional de Microestrutura e Execução
+
+- **DOM (Depth of Market)**: Livro de ordens com níveis de preço e quantidades em bid/ask.
+- **Delta**: Diferença entre volume agressor de compra e venda; indica pressão direcional.
+- **CVD (Cumulative Volume Delta)**: Soma acumulada de delta ao longo do tempo.
+- **Speed of Tape (SoT)**: Ritmo de negócios (trades) em janela de tempo; velocidade do fluxo.
+- **Footprint**: Visualização de volume por nível de preço, segmentada por agressor (buy/sell), com imbalances e point of control.
+- **Imbalance (Desequilíbrio)**: Diferença relativa ou absoluta de volume bid/ask em nível ou faixa de preço.
+- **Absorção**: Situação em que ordens passivas absorvem agressões repetidas sem mover o preço, sugerindo defesa de nível.
+- **Spoofing**: Inserção e cancelamento rápido de grandes ordens no DOM para manipular percepção de liquidez.
+- **Burst**: Explosão súbita de trades/volume em janela curta.
+- **Failed Breakout**: Quebra de nível que falha rapidamente e reverte.
+- **Liquidity Backfill (Reposição)**: Retorno de liquidez após remoção/consumo de níveis.
+- **Price Collar**: Limite de variação de preço permitido para ordens (em bps) em relação a referência.
+- **Kill-switch**: Mecanismo de parada imediata de envio de novas ordens (e possível cancelamento).
+- **Circuit Breaker**: Regra automática que interrompe trading em condições extremas (queda de feed, perda de PnL, violação de limites).
+- **Replay**: Reprodução de eventos históricos (tick/DOM/trade) com pacing realista.
+- **Reconstruction**: Reconstrução de DOM/Footprint/Delta a partir de dados brutos (ex.: dxFeed).
+- **Dual Execution**: Estratégia de envio simultâneo/alternado para múltiplos brokers (ex.: IBKR + MT5).
+- **Cross-market Mapping**: Mapeamento de símbolos entre mercados (ex.: futuro GC → CFD XAUUSD).
+- **Agressor**: Lado que remove liquidez (compra a mercado = agressor buy; venda a mercado = agressor sell).
+- **Latency Monitor**: Monitoramento de tempo de ida/volta entre envio de ordem e confirmação.
+- **Throughput**: Capacidade de processar eventos/ordens por unidade de tempo sem perda de performance.
+- **Feature Engineering**: Construção de atributos (delta, SoT, imbalances, padrões) para modelos ou sinais.
+- **Dataset Builder**: Processo de gerar datasets consistentes (features + labels) para ML/backtest.

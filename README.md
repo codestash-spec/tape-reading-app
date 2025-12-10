@@ -2,6 +2,67 @@
 
 Plataforma institucional event-driven (Python 3.x + IBKR) com dados normalizados, engines de estado (DOM/Delta/Tape/Footprint), estratégia, risco pré-trade, roteamento de ordens (sim/IBKR), telemetria estruturada e operação em modos sim/live/replay.
 
+## Arquitetura em um olhar (diagramas)
+
+### Visão Geral
+```mermaid
+flowchart LR
+    subgraph Ingest
+        IB[IBKR Realtime]
+        Replay[Historical Replay]
+    end
+    subgraph Normalize
+        IE[ibkr_events]
+        ME[MarketEvent]
+    end
+    subgraph Core
+        EB[EventBus]
+    end
+    subgraph Engines
+        DOM[DOM Engine]
+        DELTA[Delta Engine]
+        TAPE[Tape Engine]
+        FOOT[Footprint Engine]
+        STRAT[Strategy Engine]
+    end
+    subgraph RiskExec
+        RISK[Risk Engine]
+        EXEC[Execution Router]
+        ADAPT[Adapters: ibkr/sim]
+    end
+    subgraph Telemetry
+        LOGS[JSON Logs]
+        METRICS[Metrics/Tracing]
+        AUDIT[Audit Trail]
+    end
+    Ingest --> Normalize --> EB --> Engines --> RiskExec
+    Engines --> Telemetry
+    RiskExec --> Telemetry
+    EB --> Telemetry
+    RISK --> EXEC
+    EXEC --> ADAPT
+```
+
+### Pipeline de Dados e Sinais
+```mermaid
+flowchart LR
+    IB[IBKR callbacks] --> Norm[ibkr_events]
+    Replay[CSV/JSON Replay] --> Norm
+    Norm --> ME[MarketEvent]
+    ME --> Bus[EventBus]
+    Bus --> Engines[DOM/Delta/Tape/Footprint]
+    Engines --> Strat[Strategy]
+    Strat --> Signal[Signal Event]
+    Signal --> Risk[Risk Decision]
+    Risk -->|Approve| Order[OrderRequest]
+    Risk -->|Reject| LogR[Reject/Log]
+    Order --> Exec[Execution Router]
+    Exec --> Adapter[Adapter ibkr/sim]
+    Adapter --> Fills[order_event]
+    Fills --> Strat
+    Fills --> Telemetry
+```
+
 ## O que há de novo na Fase III
 - Engines DOM/Delta/Tape/Footprint em memória.
 - Estratégia event-driven (micro-price momentum) emitindo `signal`.

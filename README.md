@@ -1,8 +1,8 @@
 # BOTS INSTITUCIONAIS - EDICAO II (Fases I, II, III)
 
-Plataforma institucional event-driven (Python 3.x + IBKR) com dados normalizados, engines de estado (DOM/Delta/Tape/Footprint), estratégia, risco pré-trade, roteamento de ordens (sim/IBKR), telemetria estruturada e operação em modos sim/live/replay.
+Plataforma institucional event-driven para leitura de tape e execução profissional sobre IBKR, construída em Python 3.x, com dados normalizados, engines de estado, estratégia, risco pré-trade, roteamento de ordens (sim/IBKR) e telemetria estruturada. Adequada a operações tipo JPMorgan/HSBC: separação de responsabilidades, observabilidade, governança e modos sim/live/replay.
 
-## Arquitetura em um olhar (diagramas)
+## Arquitetura em um olhar
 
 ### Visão Geral
 ```mermaid
@@ -63,16 +63,15 @@ flowchart LR
     Fills --> Telemetry
 ```
 
-## O que há de novo na Fase III
-- Engines DOM/Delta/Tape/Footprint em memória.
-- Estratégia event-driven (micro-price momentum) emitindo `signal`.
-- Risk Engine (whitelist, tamanho, exposição, throttle, kill-switch).
-- Execution Router com adaptadores sim e stub IBKR; eventos de ordem no EventBus.
-- Telemetria JSON, métricas/tracing helpers, audit line.
-- Configuração por YAML + perfis (dev/paper/prod) + overrides por env.
-
-## Arquitetura em linha
-Providers (IBKR/Replay) → Normalizers (`ibkr_events`) → EventBus → Engines (DOM/Delta/Tape/Footprint) → Strategy → Risk → Execution Router → Adapters (sim/IBKR) → Order Events → Telemetry.
+## Capacidades Principais
+- EventBus thread-safe; `MarketEvent` imutável e alias-friendly.
+- Market data: IBKR tick/DOM/fallback L1; replay CSV/JSON com pacing.
+- Engines de estado: DOM, Delta/CVD, Tape, Footprint.
+- Estratégia: event-driven; exemplo de micro-price momentum com emissão de sinais.
+- Risco: whitelist, limites de tamanho/exposição, throttle, kill-switch.
+- Execução: Router + adaptadores sim/IBKR; eventos de ordem no bus.
+- Observabilidade: logs JSON, métricas/tracing helpers, audit trail.
+- Configuração: YAML + perfis (dev/paper/prod) + overrides por ambiente.
 
 ## Estrutura do projeto
 ```
@@ -86,30 +85,36 @@ execution/           # router.py, adapters/ibkr.py, adapters/sim.py, order_book_
 telemetry/           # logger.py, metrics.py, tracing.py, audit.py
 config/              # settings.yaml, secrets.example.yaml, profiles/{dev,paper,prod}.yaml
 tests/               # pytest suite
-main.py              # Live entrypoint (sim/ibkr)
+main.py              # Live/sim entrypoint
 run_replay.py        # Replay entrypoint
-docs: PHASE_I/II/III, CONFIG, TELEMETRY, GOVERNANCE_SECURITY, EXECUTION_PIPELINE, SIGNAL_FLOW, OPS_RUNBOOK, DIAGRAMS, ROADMAP, CHANGELOG
+docs/                # PHASE_I/II/III/IV e demais guias/diagramas
 ```
 
-## Setup
+## Instalação e Ambiente
 ```
 python -m venv .venv
 .\.venv\Scripts\activate    # PowerShell
 pip install -r requirements.txt
 ```
 
-## Testes
-```
-python -m pytest
-```
-
-## Modos de operação
+## Modos de Operação
 - **SIM**: `python main.py --profile dev --mode sim`
 - **LIVE IBKR**: `python main.py --profile prod --mode ibkr --symbol XAUUSD --host 127.0.0.1 --port 7497`
 - **REPLAY**: `python run_replay.py --file data/events.json --speed 2.0`
 
-## Status do projeto
+## Configuração
+- Base: `config/settings.yaml`
+- Perfis: `config/profiles/{dev,paper,prod}.yaml`
+- Overrides: env vars (`PROFILE`, `IBKR_HOST/PORT/CLIENT_ID`, `LOG_LEVEL`, etc.)
+
+## Observabilidade e Operação
+- Logs JSON em stdout; ajustar `telemetry.log_level` ou `LOG_LEVEL`.
+- Métricas/trace helpers in-memory; audit line via `telemetry/audit.py`.
+- Kill-switch pronto para incidentes; cancelamento de ordens via adaptadores.
+- Testes: `python -m pytest`
+
+## Status do Projeto
 - Fase I: núcleo (EventBus, MarketEvent) — concluída.
 - Fase II: provedores/normalização/replay — concluída.
 - Fase III: engines, estratégia, risco, execução, telemetria, config — concluída (v0.3.x).
-- Próximas: UI (Fase IV), execução avançada (Fase V), risco expandido (Fase VI).
+- Próximas: UI (Fase IV), execução avançada (V), risco expandido (VI), feeds e ML avançados conforme `ADVANCED_ROADMAP.md`.

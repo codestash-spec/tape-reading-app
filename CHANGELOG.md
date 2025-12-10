@@ -3,25 +3,34 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.3.0] - 2025-12-10
 ### Added
-- Expanded pytest suite (EventBus, MarketEvent aliases, replay loader, IBKR mocking).
-- Comprehensive documentation set (README, ARCHITECTURE, ROADMAP, CONTRIBUTING, STYLEGUIDE, DIAGRAMS).
-### Changed
-- EventBus made thread-safe with graceful shutdown and logging-friendly behavior.
-- IBKR connector corrected for tick-by-tick signatures and fallback publishing.
+- Engines DOM/Delta/Tape/Footprint em memória.
+- Estratégia event-driven emitindo sinais e pipeline risco→execução.
+- Execution Router com adaptadores sim e stub IBKR; eventos de ordem no EventBus.
+- Telemetria estruturada (JSON logging, métricas/tracing helpers, audit line).
+- Configuração com perfis (dev/paper/prod) e overrides por ambiente.
+- Documentação completa Phase III (arquitetura, sinal, execução, ops, gov/sec).
 
-## [v0.2.0] - 2025-12-09 (Fase II)
-### Added
-- IBKR normalization builders for tick-by-tick bid/ask, trades, DOM deltas, and Level 1 fallback.
-- Historical replay loader for CSV/JSON with speed control.
-- dxFeed provider placeholder for future adapter.
 ### Changed
-- IBKR connector subscribes DOM depth and tick-by-tick feeds with automatic Level 1 fallback.
+- README e ROADMAP atualizados para Fase III concluída.
+- Arquitetura expandida para incluir risco e execução no fluxo principal.
 
-## [v0.1.0] - 2025-12-09 (Fase I)
+### Fixed
+- Remoção de referências e TODOs pendentes; clarificação de placeholders dxFeed.
+
+## [0.2.0] - 2025-12-09 (Fase II)
 ### Added
-- Canonical `MarketEvent` model.
-- Initial `EventBus` implementation.
-- Minimal IBKR connector bootstrap and example tests.
-- Project dependencies and .gitignore baseline.
+- Normalizadores IBKR (tick-by-tick, DOM delta, fallback L1).
+- Historical replay (CSV/JSON) com controle de velocidade.
+- Placeholder dxFeed.
+
+### Changed
+- Conector IBKR assina DOM e tick-by-tick com fallback automático.
+
+## [0.1.0] - 2025-12-09 (Fase I)
+### Added
+- `MarketEvent` canônico.
+- `EventBus` thread-safe.
+- Bootstrap IBKR mínimo e testes iniciais.
+- Dependências e .gitignore base.

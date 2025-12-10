@@ -1,95 +1,113 @@
-# Diagrams
+# DIAGRAMS.md — Diagramas Integrados
 
-## EventBus flow
-```mermaid
-sequenceDiagram
-    participant Provider
-    participant Normalizer
-    participant Bus
-    participant Engine
-    Provider->>Normalizer: Raw callback
-    Normalizer->>Bus: MarketEvent(event_type)
-    Bus-->>Engine: Dispatch by event_type
-    Engine-->>Bus: (optional) Derived events
-```
-
-## MarketEvent transformation pipeline (IBKR)
+## Arquitetura Geral
 ```mermaid
 flowchart LR
-    A[IBKR tick/DOM callback] --> B[ibkr_events builders]
-    B --> C[MarketEvent]
-    C --> D[EventBus.publish]
-    D --> E[DOM/Delta/Tape Engines]
-```
-
-## Provider -> Engine -> UI overview
-```mermaid
-flowchart LR
-    Providers --> Bus[EventBus]
-    Bus --> Engines["Engines (DOM/Delta/Tape/Footprint)"]
-    Engines --> UI["UI Panels"]
-    Engines --> Exec["Execution/Risk"]
-```
-
-## DOM Engine processing
-```mermaid
-flowchart LR
-    Delta["DOM deltas (MarketEvent.dom_delta)"] --> State["DOM Engine state store"]
-    State --> Ladder["DOM ladder snapshot"]
-    Ladder --> Outputs["UI panels / replay snapshots"]
-```
-
-## DOM Engine placeholder (future)
-```mermaid
-flowchart TB
-    subgraph DOMEngine
-        A[Receive dom_delta] --> B[Update ladder levels]
-        B --> C[Compute spreads/imbalance]
-        C --> D[Emit dom_snapshot]
+    subgraph Ingest
+        IB[IBKR Realtime]
+        Replay[Historical Replay]
+        DX[Future dxFeed]
     end
-    D --> UI[DOM Ladder UI]
-```
-
-## Delta Engine processing
-```mermaid
-flowchart LR
-    Trades[Trade/Tick events] --> Agg[Aggressor inference]
-    Agg --> Bars[Delta bars / footprint cells]
-    Bars --> Signals[Imbalance & absorption signals]
-    Signals --> Consumers[UI / Execution / Risk]
-```
-
-## Replay engine pipeline
-```mermaid
-flowchart LR
-    Files[CSV/JSON datasets] --> Loader[HistoricalLoader]
-    Loader --> Bus[EventBus.publish]
-    Bus --> Engines[Engines/UI subscribers]
-```
-
-## Top-level system
-```mermaid
-flowchart LR
-    subgraph Providers
-        IB[IBKR]
-        DX[dxFeed]
-        Hist[Historical Replay]
+    subgraph Normalize
+        IE[ibkr_events]
+        ME[MarketEvent Schema]
     end
     subgraph Core
-        Norm[Normalization]
         EB[EventBus]
     end
     subgraph Engines
-        DOM["DOM Engine"]
-        DELTA["Delta Engine"]
-        TAPE["Tape / Footprint"]
-        PAT["Patterns / ML"]
+        DOM[DOM Engine]
+        DELTA[Delta Engine]
+        TAPE[Tape Engine]
+        FOOT[Footprint Engine]
+        STRAT[Strategy Engine]
     end
-    subgraph Execution
-        MT5["MT5 Adapter"]
-        IBX["IBKR Orders"]
-        RISK["Risk Engine"]
+    subgraph RiskExec
+        RISK[Risk Engine]
+        EXEC[Execution Router]
+        ADAPT[Adapters: ibkr/sim]
     end
-    Providers --> Norm --> EB --> Engines --> Execution
-    EB --> UI[UI Panels]
+    subgraph Telemetry
+        LOGS[JSON Logs]
+        METRICS[Metrics/Tracing]
+        AUDIT[Audit Trail]
+    end
+    Ingest --> Normalize --> EB --> Engines --> RiskExec
+    Engines --> Telemetry
+    RiskExec --> Telemetry
+    EB --> Telemetry
+    RISK --> EXEC
+    EXEC --> ADAPT
+```
+
+## Data Pipeline
+```mermaid
+flowchart LR
+    IB[IBKR API] --> Raw[Raw callbacks]
+    Replay[CSV/JSON Replay] --> Raw
+    Raw --> Norm[Normalization (ibkr_events)]
+    Norm --> ME[MarketEvent]
+    ME --> Bus[EventBus.publish]
+    Bus --> Engines[Engines State]
+    Engines --> Strat[Strategy]
+    Strat --> Risk[Risk Engine]
+    Risk --> Exec[Execution Router]
+    Exec --> Adapters[Adapters ibkr/sim]
+```
+
+## Signal Flow
+```mermaid
+flowchart LR
+    Tick[Tick/Trade/DOM Events] --> Feat[Feature/State Updates]
+    Feat --> Strat[Strategy Logic]
+    Strat --> Signal[Signal Event]
+    Signal --> Risk[Risk Decision]
+    Risk -->|Approve| Order[OrderRequest]
+    Risk -->|Reject| LogR[Risk Reject Log]
+    Order --> Exec[Execution Router]
+    Exec --> Adapter[Adapter]
+    Adapter --> Fills[Order Events]
+    Fills --> Strat
+    Fills --> Telemetry
+```
+
+## Execution Flow
+```mermaid
+flowchart LR
+    Signal[Signal Event] --> Risk
+    Risk -->|Approve| Router[Execution Router]
+    Risk -->|Reject| Reject[Reject/Log]
+    Router --> Adapter[Adapter ibkr/sim]
+    Adapter --> Bus[order_event -> EventBus]
+    Bus --> Consumers[Strategy/Risk/Telemetry]
+```
+
+## Risk Decision Tree
+```mermaid
+flowchart TD
+    Start[Order Intent] --> Kill[Kill-switch engaged?]
+    Kill -->|Yes| RejectKS[Reject: kill-switch]
+    Kill -->|No| Sym[Symbol whitelisted?]
+    Sym -->|No| RejectSym[Reject: symbol]
+    Sym -->|Yes| Size[Within size limit?]
+    Size -->|No| RejectSize[Reject: size_limit]
+    Size -->|Yes| Expo[Within exposure cap?]
+    Expo -->|No| RejectExpo[Reject: exposure_limit]
+    Expo -->|Yes| Throt[Throttle window ok?]
+    Throt -->|No| RejectThrot[Reject: throttle_exceeded]
+    Throt -->|Yes| Approve[Approve -> Execution]
+```
+
+## Failure & Recovery
+```mermaid
+flowchart LR
+    Fault[Fault Detected] --> Classify[Classify: Feed | Exec | Risk | Infra]
+    Classify --> FeedStale[Feed Stale] --> Action1[Fallback L1 / Alert / Halt strategies]
+    Classify --> ExecErr[Execution Error] --> Action2[Retry/Cancel/Route sim]
+    Classify --> RiskTrip[Risk Trip] --> Action3[Engage Kill-switch + Cancel]
+    Classify --> Infra[Infra/Process] --> Action4[Restart worker / Replay]
+    Action1 --> Telemetry[Log/Audit/Metrics]
+    Action2 --> Telemetry
+    Action3 --> Telemetry
+    Action4 --> Telemetry
 ```

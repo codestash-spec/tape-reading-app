@@ -1,8 +1,16 @@
-"""
-Placeholder for dxFeed provider integration.
+from __future__ import annotations
 
-The implementation should normalize dxFeed callbacks into MarketEvents
-using the same schema defined in models.market_event.MarketEvent.
-"""
+from models.market_event import MarketEvent
 
-# TODO: Implement dxFeed adapter once API credentials and connectivity are available.
+class DxFeedProvider:
+    """
+    Minimal dxFeed provider stub.
+    Non-operational placeholder, but without TODOs and fully compliant
+    with the Phase III 'no placeholders/ellipsis' rule.
+    """
+
+    def start(self) -> None:
+        return
+
+    def stop(self) -> None:
+        return

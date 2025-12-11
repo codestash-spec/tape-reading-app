@@ -42,7 +42,18 @@ class DepthEngine:
         st.ask_size = ask_size
         denom = bid_size + ask_size
         st.imbalance = ((bid_size - ask_size) / denom) if denom else 0.0
-        st.liquidity_map = {str(k): float(v) for k, v in ladder.items()}
+        normalized = {}
+        for k, v in ladder.items():
+            try:
+                if isinstance(v, dict):
+                    bid_v = float(v.get("bid", 0.0) or 0.0)
+                    ask_v = float(v.get("ask", 0.0) or 0.0)
+                    normalized[str(k)] = bid_v + ask_v
+                else:
+                    normalized[str(k)] = float(v)
+            except Exception:
+                continue
+        st.liquidity_map = normalized
         st.queue_position = self._estimate_queue_position(st, my_order_qty)
 
         self.state[symbol] = st

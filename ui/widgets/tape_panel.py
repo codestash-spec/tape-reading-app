@@ -5,8 +5,9 @@ from typing import Deque, Dict, Any
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from ui.event_bridge import EventBridge
 from ui.themes import brand
+from ui.event_bridge import EventBridge
+from ui.state import UIState
 
 
 class TapeTableModel(QtCore.QAbstractTableModel):
@@ -177,9 +178,7 @@ class TapePanel(QtWidgets.QWidget):
         self._pending.append(trade)
 
     def _flush(self) -> None:
-        from ui.widgets.dom_panel import UI_UPDATE_PAUSED
-
-        if UI_UPDATE_PAUSED or not self._pending:
+        if UIState.is_paused() or not self._pending:
             return
         batch = self._pending[:]
         self._pending.clear()

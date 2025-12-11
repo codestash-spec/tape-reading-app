@@ -35,6 +35,7 @@ class MarketWatchPanel(QtWidgets.QWidget):
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.cellClicked.connect(self._on_cell_clicked)
+        self.table.itemDoubleClicked.connect(self._on_row_double_clicked)
         self.table.setFont(QtGui.QFont(brand.FONT_FAMILY, brand.FONT_MEDIUM))
 
         self.add_btn = QtWidgets.QPushButton("+ Add Instrument")
@@ -211,21 +212,26 @@ class MarketWatchPanel(QtWidgets.QWidget):
         self._update_price(sym, float(price), provider=source, spread=spread, vol24h=vol24h, latency=latency, depth=depth)
 
     def _on_cell_clicked(self, row: int, col: int) -> None:
-        if col == 0:
-            sym = self.table.item(row, 0).text()
-            self.instrumentSelected.emit(sym)
+        # No auto-apply on single click; Apply button or double-click triggers.
+        return
 
-    def apply_on_start(self, symbol: str) -> None:
-        """Selects and emits the given symbol once on startup."""
-        if self._initial_applied:
+    def _on_row_double_clicked(self, item: QtWidgets.QTableWidgetItem) -> None:
+        sym = self.table.item(item.row(), 0)
+        if sym:
+            self.instrumentSelected.emit(sym.text())
+
+    def apply_on_start(self, symbol: str, apply: bool = False) -> None:
+        """Selects the given symbol once on startup. Optionally triggers Apply."""
+        if self._initial_applied and apply:
             return
         for row in range(self.table.rowCount()):
             if self.table.item(row, 0).text().upper() == symbol.upper():
                 self.table.selectRow(row)
-                self.instrumentSelected.emit(symbol)
-                self._initial_applied = True
+                if apply:
+                    self.instrumentSelected.emit(symbol)
+                    self._initial_applied = True
                 break
 
-    def apply_default_symbol_on_start(self, default_symbol: str) -> None:
+    def apply_default_symbol_on_start(self, default_symbol: str, apply: bool = False) -> None:
         self.default_symbol = default_symbol.upper()
-        self.apply_on_start(self.default_symbol)
+        self.apply_on_start(self.default_symbol, apply=apply)

@@ -19,6 +19,11 @@ class IcebergDetector:
         self.min_size = min_size
         self.repeats: Dict[str, Dict[float, int]] = {}
         self.bus.subscribe("trade", self.on_trade)
+        self._subs = ("trade",)
+
+    def stop(self) -> None:
+        for et in getattr(self, "_subs", ()):
+            self.bus.unsubscribe(et, self.on_trade)
 
     def on_trade(self, evt: MarketEvent) -> None:
         sym = evt.symbol

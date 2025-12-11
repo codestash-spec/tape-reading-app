@@ -18,6 +18,14 @@ class RegimeEngine:
         self.bus.subscribe("volatility_update", self.on_vol)
         self.bus.subscribe("microstructure", self.on_micro)
         self.current_vol: Dict[str, float] = {}
+        self._subs = ("volatility_update", "microstructure")
+
+    def stop(self) -> None:
+        for et in getattr(self, "_subs", ()):
+            if et == "volatility_update":
+                self.bus.unsubscribe(et, self.on_vol)
+            else:
+                self.bus.unsubscribe(et, self.on_micro)
 
     def on_vol(self, evt: MarketEvent) -> None:
         self.current_vol[evt.symbol] = evt.payload.get("atr", 0.0)

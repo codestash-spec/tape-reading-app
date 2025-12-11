@@ -16,7 +16,7 @@ def detect_instrument(symbol: str) -> Dict[str, str]:
     }
     fx_list = {"XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "NZDUSD", "USDCAD", "USDCHF"}
     cfd_tokens = ("CFD", "_IBKR", ".FPM")
-    binance_tokens = ("XAUUSDT", "GOLDUSDT")
+    binance_tokens = ("XAUUSDT", "GOLDUSDT", "BTCUSDT", "ETHUSDT")
     okx_tokens = ("XAUTUSDT", "GOLDUSDT.OKX", "XAUT/USDT")
     fut_tokens = ("GC", "GOLD")
 

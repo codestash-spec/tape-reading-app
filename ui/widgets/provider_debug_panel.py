@@ -7,6 +7,7 @@ from PySide6 import QtWidgets, QtCore
 
 from ui.event_bridge import EventBridge
 from ui import helpers
+from ui.state import UIState
 
 
 class ProviderDebugPanel(QtWidgets.QWidget):
@@ -28,7 +29,7 @@ class ProviderDebugPanel(QtWidgets.QWidget):
             bridge.bus.subscribe(et, self._on_evt)
 
     def _on_evt(self, evt: Any) -> None:
-        if helpers.UI_UPDATE_PAUSED:
+        if UIState.is_paused():
             return
         ts = getattr(evt, "timestamp", None)
         delay = ""

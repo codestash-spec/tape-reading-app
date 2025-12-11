@@ -4,9 +4,10 @@ from typing import Dict, List, Tuple, Any
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from ui.event_bridge import EventBridge
 from ui.themes import brand
 from ui import helpers
+from ui.event_bridge import EventBridge
+from ui.state import UIState
 
 
 class DomTableModel(QtCore.QAbstractTableModel):
@@ -156,7 +157,7 @@ class DomPanel(QtWidgets.QWidget):
         self._pending_payload = payload
 
     def _flush(self) -> None:
-        if helpers.UI_UPDATE_PAUSED or self._pending_payload is None:
+        if UIState.is_paused() or self._pending_payload is None:
             return
         payload = self._pending_payload
         self._pending_payload = None
@@ -229,21 +230,25 @@ class DomPanel(QtWidgets.QWidget):
         scrolled = QtGui.QPixmap(w, h)
         scrolled.fill(QtGui.QColor(15, 27, 43))
         painter = QtGui.QPainter(scrolled)
-        painter.drawPixmap(0, row_h, self._trail)
-        # draw newest stripe at top: map prices to x-axis, intensity by size
-        max_size = max(max(r[1], r[2]) for r in rows) or 1.0
-        prices = [r[0] for r in rows]
-        p_min, p_max = min(prices), max(prices)
-        span = p_max - p_min if p_max != p_min else 1.0
-        for price, bid, ask, _ in rows:
-            x = int(((price - p_min) / span) * (w - 1))
-            bid_alpha = int(30 + 200 * min(1.0, bid / max_size))
-            ask_alpha = int(30 + 200 * min(1.0, ask / max_size))
-            painter.setPen(QtGui.QPen(QtGui.QColor(18, 216, 250, bid_alpha)))
-            painter.drawLine(x, 0, x, row_h)
-            painter.setPen(QtGui.QPen(QtGui.QColor(255, 95, 86, ask_alpha)))
-            painter.drawLine(x, 0, x, row_h)
-        painter.end()
+        try:
+            painter.drawPixmap(0, row_h, self._trail)
+            # draw newest stripe at top: map prices to x-axis, intensity by size
+            max_size = max(max(r[1], r[2]) for r in rows) or 1.0
+            if max_size <= 0:
+                max_size = 1.0
+            prices = [r[0] for r in rows]
+            p_min, p_max = min(prices), max(prices)
+            span = p_max - p_min if p_max != p_min else 1.0
+            for price, bid, ask, _ in rows:
+                x = int(((price - p_min) / span) * (w - 1))
+                bid_alpha = int(30 + 200 * min(1.0, bid / max_size))
+                ask_alpha = int(30 + 200 * min(1.0, ask / max_size))
+                painter.setPen(QtGui.QPen(QtGui.QColor(18, 216, 250, bid_alpha)))
+                painter.drawLine(x, 0, x, row_h)
+                painter.setPen(QtGui.QPen(QtGui.QColor(255, 95, 86, ask_alpha)))
+                painter.drawLine(x, 0, x, row_h)
+        finally:
+            painter.end()
         self._trail = scrolled
         self.heatmap.setPixmap(self._trail)
         helpers.fps_tick()

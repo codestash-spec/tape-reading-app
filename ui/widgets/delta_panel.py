@@ -7,9 +7,10 @@ from typing import Deque, Dict, List, Tuple
 import pyqtgraph as pg
 from PySide6 import QtWidgets, QtCore
 
-from ui.event_bridge import EventBridge
 from ui.themes import brand
 from ui import helpers
+from ui.event_bridge import EventBridge
+from ui.state import UIState
 
 
 class DeltaPanel(QtWidgets.QWidget):
@@ -58,7 +59,7 @@ class DeltaPanel(QtWidgets.QWidget):
         self._pending_snapshot = snapshot
 
     def _flush(self) -> None:
-        if helpers.UI_UPDATE_PAUSED:
+        if UIState.is_paused():
             return
         if self._pending_delta:
             data = self._pending_delta

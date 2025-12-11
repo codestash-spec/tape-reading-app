@@ -60,6 +60,15 @@ class EventBus:
                 if et in self._subscribers and callback in self._subscribers[et]:
                     self._subscribers[et].remove(callback)
 
+    def unsubscribe_all_for(self, callback: Callback) -> None:
+        """
+        Remove a callback from every event type where it is registered.
+        """
+        with self._lock:
+            for et, subs in list(self._subscribers.items()):
+                if callback in subs:
+                    subs[:] = [cb for cb in subs if cb is not callback]
+
     # --------------------------------------------------------
     # PUBLISH
     # --------------------------------------------------------
@@ -80,11 +89,14 @@ class EventBus:
                 "microstructure",
                 "liquidity",
                 "liquidity_map",
+                "liquidity_map_engine",
                 "volume_profile",
+                "volume_profile_engine",
                 "volatility",
                 "regime",
                 "regime_engine",
                 "strategy",
+                "strategy_orchestrator",
                 "execution",
                 "router",
                 "risk",
@@ -93,6 +105,11 @@ class EventBus:
                 "delta",
                 "footprint",
                 "sim",
+                "ohlc_engine",
+                "spoof_detector",
+                "iceberg_detector",
+                "large_trade_detector",
+                "simple_strategy",
             }
             if src_key not in allowed and src_key not in internal_sources:
                 logging.getLogger(__name__).error(

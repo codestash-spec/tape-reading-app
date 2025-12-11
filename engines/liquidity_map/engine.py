@@ -26,6 +26,11 @@ class LiquidityMapEngine:
         self.state: Dict[str, LiquidityState] = {}
         self.bus.subscribe("dom_snapshot", self.on_dom)
         self.bus.subscribe("trade", self.on_trade)
+        self._subs = ("dom_snapshot", "trade")
+
+    def stop(self) -> None:
+        for et in getattr(self, "_subs", ()):
+            self.bus.unsubscribe(et, self.on_dom if et == "dom_snapshot" else self.on_trade)
 
     def on_dom(self, evt: MarketEvent) -> None:
         sym = evt.symbol

@@ -248,6 +248,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         provider_manager=None,
         event_bus=None,
         pm_settings: Optional[dict] = None,
+        on_switch_symbol: Optional[Callable[[str], None]] = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -257,6 +258,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.provider_manager = provider_manager
         self.bus = event_bus
         self.pm_settings = pm_settings or {}
+        self._on_switch_symbol = on_switch_symbol
         self.setWindowTitle("Bots Institucionais - Tape Reading")
         self.theme = Theme(theme_mode)
         self._apply_theme()
@@ -291,6 +293,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.market_watch.instrumentSelected.connect(self._switch_instrument)
         self.status_widget = StatusBarWidget()
         self.provider_debug = ProviderDebugPanel()
+        self.execution_mode_label = QtWidgets.QLabel(f"Exec: {getattr(provider_manager, 'execution_mode', 'SIM')}")
 
         # Wire bridge
         self.dom_panel.connect_bridge(bridge)
@@ -311,22 +314,27 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
 
         # DockArea layout
         self.area.addDock(Dock("Chart", widget=self.chart))
-        self.area.addDock(Dock("DOM", widget=self.dom_panel), "left", self.area.docks["Chart"])
+        # Left column: MarketWatch + Footprint, DOM stacked nearby
+        self.area.addDock(Dock("MarketWatch", widget=self.market_watch), "left", self.area.docks["Chart"])
+        self.area.addDock(Dock("Footprint", widget=self.footprint_panel), "bottom", self.area.docks["MarketWatch"])
+        self.area.addDock(Dock("DOM", widget=self.dom_panel), "right", self.area.docks["MarketWatch"])
         self.area.addDock(Dock("Delta", widget=self.delta_panel), "above", self.area.docks["DOM"])
-        self.area.addDock(Dock("Footprint", widget=self.footprint_panel), "above", self.area.docks["Delta"])
+        # Center: Chart + Tape + Metrics
         self.area.addDock(Dock("Tape", widget=self.tape_panel), "bottom", self.area.docks["Chart"])
+        self.area.addDock(Dock("Metrics", widget=self.metrics_panel), "bottom", self.area.docks["Tape"])
+        # Right: Strategy/Execution/Vol/Regime/Liquidity/VolumeProfile stack
         self.area.addDock(Dock("Strategy", widget=self.strategy_panel), "right", self.area.docks["Chart"])
         self.area.addDock(Dock("Execution", widget=self.execution_panel), "bottom", self.area.docks["Strategy"])
-        self.area.addDock(Dock("Metrics", widget=self.metrics_panel), "bottom", self.area.docks["Execution"])
-        self.area.addDock(Dock("Logs", widget=self.logs_panel), "bottom", self.area.docks["Tape"])
-        self.area.addDock(Dock("Liquidity", widget=self.liquidity_panel), "right", self.area.docks["Execution"])
-        self.area.addDock(Dock("VolumeProfile", widget=self.vol_profile_panel), "above", self.area.docks["Liquidity"])
-        self.area.addDock(Dock("Regime", widget=self.regime_panel), "above", self.area.docks["VolumeProfile"])
-        self.area.addDock(Dock("Volatility", widget=self.vol_panel), "above", self.area.docks["Regime"])
-        self.area.addDock(Dock("MarketWatch", widget=self.market_watch), "left", self.area.docks["DOM"])
+        self.area.addDock(Dock("Liquidity", widget=self.liquidity_panel), "bottom", self.area.docks["Execution"])
+        self.area.addDock(Dock("VolumeProfile", widget=self.vol_profile_panel), "bottom", self.area.docks["Liquidity"])
+        self.area.addDock(Dock("Regime", widget=self.regime_panel), "bottom", self.area.docks["VolumeProfile"])
+        self.area.addDock(Dock("Volatility", widget=self.vol_panel), "bottom", self.area.docks["Regime"])
+        # Logs and Debug
+        self.area.addDock(Dock("Logs", widget=self.logs_panel), "bottom", self.area.docks["Metrics"])
         self.area.addDock(Dock("ProviderDebug", widget=self.provider_debug), "bottom", self.area.docks["Logs"])
 
         self.statusBar().addPermanentWidget(self.status_widget)
+        self.statusBar().addPermanentWidget(self.execution_mode_label)
 
         self._build_menu()
         self._build_toolbar()
@@ -414,6 +422,10 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         # hotkeys
         QtGui.QShortcut(QtGui.QKeySequence("Ctrl+1"), self, activated=lambda: self._cycle_watch(-1))
         QtGui.QShortcut(QtGui.QKeySequence("Ctrl+2"), self, activated=lambda: self._cycle_watch(1))
+        QtGui.QShortcut(QtGui.QKeySequence("Ctrl+F1"), self, activated=lambda: self._apply_preset("scalping"))
+        QtGui.QShortcut(QtGui.QKeySequence("Ctrl+F2"), self, activated=lambda: self._apply_preset("btc"))
+        QtGui.QShortcut(QtGui.QKeySequence("Ctrl+F3"), self, activated=lambda: self._apply_preset("cme"))
+        QtGui.QShortcut(QtGui.QKeySequence("Ctrl+F4"), self, activated=lambda: self._apply_preset("custom"))
         # status FPS monitor placeholder
         from ui.perf_monitor import FPSMonitor
 
@@ -430,7 +442,11 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         QtWidgets.QMessageBox.information(
             self,
             "About",
-            "Bots Institucionais – UI\nPhases I–VII\nEvent-driven microstructure + execution stack.",
+            "Bots Institucionais UI\nPhases I–VII\nEvent-driven microstructure + execution stack.\n"
+            "Shortcuts:\n"
+            "Ctrl+F1/F2/F3/F4: Layout presets\n"
+            "Double-click MarketWatch row: Apply instrument\n"
+            "Ctrl+1/Ctrl+2: Cycle watchlist",
         )
 
     def _open_ticket(self) -> None:
@@ -451,12 +467,9 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         dlg.exec()
 
     def _apply_settings(self, cfg: dict) -> None:
-        if self.provider_manager and cfg.get("provider"):
-            self.provider_manager.start(cfg["provider"])
+        if cfg.get("provider") and self._on_switch_symbol:
+            self._on_switch_symbol(cfg.get("symbol") or self.pm_settings.get("market_symbol", ""))
             self.status_widget.conn_label.setText(f"Conn: {cfg['provider']}")
-            # reset event bridge subscriptions to avoid duplicates
-            self.bridge.stop()
-            self.bridge.start()
 
     def _cycle_watch(self, step: int) -> None:
         total = self.market_watch.table.rowCount()
@@ -472,25 +485,9 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
             self._switch_instrument(sym_item.text())
 
     def _switch_instrument(self, symbol: str) -> None:
-        if not self.bus:
-            return
-        # rebuild provider manager with new symbol
-        if self.provider_manager:
-            self.provider_manager.stop()
-        if hasattr(self.market_watch, "disconnect_bridge"):
-            self.market_watch.disconnect_bridge()
-        cfg = dict(self.pm_settings)
-        cfg["market_symbol"] = symbol
-        cfg["symbols"] = [symbol]
-        from providers.provider_manager import ProviderManager
-        self.provider_manager = ProviderManager(self.bus, cfg)
-        self.provider_manager.auto_start()
-        self.bridge.stop()
-        self.bridge.start()
-        if hasattr(self.market_watch, "connect_bridge"):
-            self.market_watch.connect_bridge(self.bridge)
-        self.status_widget.conn_label.setText(f"Conn: {self.provider_manager.active_name}")
-        self.statusBar().showMessage(f"[MarketWatch] User selected {symbol} (provider={self.provider_manager.active_name})", 3000)
+        if self._on_switch_symbol:
+            self._on_switch_symbol(symbol)
+            self.statusBar().showMessage(f"[MarketWatch] User selected {symbol}", 3000)
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self.save_state()

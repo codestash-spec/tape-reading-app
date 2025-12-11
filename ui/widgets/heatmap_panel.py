@@ -4,6 +4,7 @@ from PySide6 import QtWidgets, QtCore, QtGui
 from ui.event_bridge import EventBridge
 from ui.themes import brand
 from ui import helpers
+from ui.state import UIState
 
 
 class HeatmapPanel(QtWidgets.QWidget):
@@ -37,7 +38,7 @@ class HeatmapPanel(QtWidgets.QWidget):
         self.update()
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
-        if helpers.UI_UPDATE_PAUSED:
+        if UIState.is_paused():
             return
         painter = QtGui.QPainter(self)
         try:
@@ -47,7 +48,9 @@ class HeatmapPanel(QtWidgets.QWidget):
             w = self.width()
             h = self.height()
             max_size = max(max(b, a) for _, b, a in self.ladder) or 1.0
-            row_h = max(2, h // len(self.ladder))
+            if max_size <= 0:
+                max_size = 1.0
+            row_h = max(2, h // max(1, len(self.ladder)))
             for i, (price, bid, ask) in enumerate(self.ladder):
                 y = i * row_h
                 bid_w = int((bid / max_size) * (w / 2))

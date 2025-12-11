@@ -17,6 +17,11 @@ class LargeTradeDetector:
         self.bus = bus
         self.threshold = threshold
         self.bus.subscribe("trade", self.on_trade)
+        self._subs = ("trade",)
+
+    def stop(self) -> None:
+        for et in getattr(self, "_subs", ()):
+            self.bus.unsubscribe(et, self.on_trade)
 
     def on_trade(self, evt: MarketEvent) -> None:
         payload = evt.payload or {}

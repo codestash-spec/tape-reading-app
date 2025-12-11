@@ -97,6 +97,15 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+### Execução MT5 (BTCUSDT)
+- Configure em `config/settings.yaml` (ou perfil):
+  - `execution.mode: mt5`
+  - `execution.mt5_symbol_btc: BTCUSD` (símbolo MT5)
+  - `execution.mt5_volume_btc: 0.01`
+  - `execution.dry_run: true` (segurança; false envia ordens reais)
+- No Settings UI escolha Execution mode MT5 para alternar de SIM.
+- **AVISO:** desativar `dry_run` em MT5 pode enviar ordens reais.
+
 ## Modos de Operação
 - **SIM**: `python main.py --profile dev --mode sim`
 - **LIVE IBKR**: `python main.py --profile prod --mode ibkr --symbol XAUUSD --host 127.0.0.1 --port 7497`

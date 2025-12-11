@@ -1,9 +1,21 @@
 {
-  "binance_ws": "robust + heartbeat/backoff + fallback",
+  "binance_ws": "robust + heartbeat/backoff + fallback + kline_1s feeding chart",
   "autostart_btcusdt": true,
-  "marketwatch_default_apply": true,
+  "marketwatch_default_apply": "selected without override; user apply required",
   "strategy_sim": "wired",
   "execution_sim": "wired",
   "debug_panel": "basic",
-  "fps_monitor": "basic"
+  "fps_monitor": "basic",
+  "engine_reset": "stop/unsubscribe + rebuild on provider switch",
+  "ghost_events": "filtered; allowed_sources refreshed per provider",
+  "ui_state": "shared UIState pause flag",
+  "final_sweep_done": true,
+  "ui_perf_finalized": true,
+  "fps_monitor": true,
+  "remaining_limitations": "IBKR still mock; advanced perf/docking polish deferred",
+  "ui_layout": "1080p friendly: left MarketWatch+Footprint+DOM, center Chart+Tape+Metrics, right Strat/Exec/Liquidity/Volume/Regime/Volatility; logs/debug bottom",
+  "ui_performance": "timed flush ~60FPS, pause on drag/resize, painter safeguards",
+  "execution_mt5_available": true,
+  "execution_modes": ["SIM", "MT5"],
+  "mt5_dry_run_supported": true
 }

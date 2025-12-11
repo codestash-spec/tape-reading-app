@@ -19,6 +19,11 @@ class VolatilityEngine:
         self.window = window
         self.prices: Dict[str, Deque[float]] = {}
         self.bus.subscribe("trade", self.on_trade)
+        self._subs = ("trade",)
+
+    def stop(self) -> None:
+        for et in getattr(self, "_subs", ()):
+            self.bus.unsubscribe(et, self.on_trade)
 
     def on_trade(self, evt: MarketEvent) -> None:
         sym = evt.symbol

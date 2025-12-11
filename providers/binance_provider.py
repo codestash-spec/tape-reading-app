@@ -94,13 +94,16 @@ class BinanceProvider(ProviderBase):
         trade_url = f"wss://stream.binance.com/ws/{stream}@aggTrade"
         ticker_url = f"wss://stream.binance.com/ws/{stream}@ticker"
         book_url = f"wss://stream.binance.com/ws/{stream}@bookTicker"
+        kline_url = f"wss://stream.binance.com/ws/{stream}@kline_1s"
         self._ws_tasks = [
             self._loop.create_task(self._ws_consume(depth_url, self._handle_depth)),
             self._loop.create_task(self._ws_consume(trade_url, self._handle_trade)),
             self._loop.create_task(self._ws_consume(ticker_url, self._handle_ticker)),
             self._loop.create_task(self._ws_consume(book_url, self._handle_book)),
+            self._loop.create_task(self._ws_consume(kline_url, self._handle_kline)),
             self._loop.create_task(self._heartbeat_watch()),
         ]
+        logging.getLogger(__name__).info("[Provider] binance connected (ws tasks started)")
         self._loop.run_forever()
 
     async def _heartbeat_watch(self) -> None:
@@ -149,6 +152,9 @@ class BinanceProvider(ProviderBase):
             "change": float(data.get("P", 0.0)),
             "volume": float(data.get("v", 0.0)),
             "provider": "binance",
+            "bid": self._best_bid,
+            "ask": self._best_ask,
+            "depth": "20",
         }
         evt = MarketEvent(
             event_type="quote",
@@ -173,6 +179,27 @@ class BinanceProvider(ProviderBase):
             self.bus.publish(self.normalize_dom({"dom": dom, "last": mid}))
             self.bus.publish(self.normalize_trade(trade))
             time.sleep(0.15)
+
+    def _handle_kline(self, data: dict) -> None:
+        k = data.get("k") or {}
+        try:
+            ts_start = int(k.get("t", 0)) / 1000.0
+            ts_close = int(k.get("T", 0)) / 1000.0
+            o = float(k.get("o", 0.0))
+            h = float(k.get("h", 0.0))
+            l = float(k.get("l", 0.0))
+            c = float(k.get("c", 0.0))
+            v = float(k.get("v", 0.0))
+        except Exception:
+            return
+        evt = MarketEvent(
+            event_type="chart_ohlc",
+            timestamp=datetime.fromtimestamp(ts_close, tz=timezone.utc),
+            source="binance",
+            symbol=self.symbol,
+            payload={"time": ts_close, "open": o, "high": h, "low": l, "close": c, "volume": v},
+        )
+        self.bus.publish(evt)
 
     def normalize_dom(self, raw: Any) -> MarketEvent:
         ts = datetime.now(timezone.utc)

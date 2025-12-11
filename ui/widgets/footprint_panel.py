@@ -7,6 +7,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from ui.event_bridge import EventBridge
 from ui import helpers
 from ui.themes import brand
+from ui.state import UIState
 
 
 class FootprintModel(QtCore.QObject):
@@ -52,6 +53,8 @@ class _FootprintCanvas(QtWidgets.QWidget):
             if not prices:
                 return
             max_vol = max((max(v["buy"], v["sell"]) for v in fp.values()), default=1.0)
+            if max_vol <= 0:
+                max_vol = 1.0
             cell_h = max(12, int(self.height() / len(prices)))
             cell_w = self.width() // 3
             y = 0
@@ -141,7 +144,7 @@ class FootprintPanel(QtWidgets.QWidget):
             self._pending = fp
 
     def _flush(self) -> None:
-        if helpers.UI_UPDATE_PAUSED or self._pending is None:
+        if UIState.is_paused() or self._pending is None:
             return
         data = self._pending
         self._pending = None

@@ -20,6 +20,11 @@ class SpoofingDetector:
         self.ratio = ratio
         self.history: Dict[str, deque[Dict[str, Any]]] = {}
         self.bus.subscribe("dom_snapshot", self.on_dom)
+        self._subs = ("dom_snapshot",)
+
+    def stop(self) -> None:
+        for et in getattr(self, "_subs", ()):
+            self.bus.unsubscribe(et, self.on_dom)
 
     def on_dom(self, evt: MarketEvent) -> None:
         sym = evt.symbol

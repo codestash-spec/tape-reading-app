@@ -30,6 +30,11 @@ class StrategyOrchestrator:
 
     def start(self) -> None:
         self.bus.subscribe("microstructure", self.on_microstructure)
+        self._subs = ("microstructure",)
+
+    def stop(self) -> None:
+        for et in getattr(self, "_subs", ()):
+            self.bus.unsubscribe(et, self.on_microstructure)
 
     def on_microstructure(self, evt: MarketEvent) -> None:
         symbol = evt.symbol

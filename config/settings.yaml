@@ -13,6 +13,9 @@ telemetry:
   log_level: INFO
 execution:
   mode: sim
+  mt5_symbol_btc: BTCUSD
+  mt5_volume_btc: 0.01
+  dry_run: true
   slippage_bps: 0
 risk:
   symbols: ["XAUUSD", "EURUSD"]

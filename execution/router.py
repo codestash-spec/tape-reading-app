@@ -15,14 +15,20 @@ class ExecutionRouter:
     Routes orders to a concrete adapter and publishes order events to the EventBus.
     """
 
-    def __init__(self, bus: EventBus, adapter) -> None:
+    def __init__(self, bus: EventBus, adapter, mode: str = "SIM") -> None:
         self.bus = bus
         self.adapter = adapter
+        self.mode = mode.upper()
         self.orders: Dict[str, OrderRequest] = {}
 
     def submit(self, order: OrderRequest) -> None:
         self.orders[order.order_id] = order
-        log.info("Routing order %s", order.order_id, extra={"order_id": order.order_id, "symbol": order.symbol})
+        log.info(
+            "Routing order %s via %s",
+            order.order_id,
+            self.mode,
+            extra={"order_id": order.order_id, "symbol": order.symbol, "mode": self.mode},
+        )
         self.adapter.send(order)
 
     def cancel(self, order_id: str) -> None:

@@ -32,6 +32,12 @@ class MicrostructureEngine:
     def start(self) -> None:
         for et in ("dom_snapshot", "dom_delta", "trade", "tick"):
             self.bus.subscribe(et, self.on_event)
+        self._subs = ("dom_snapshot", "dom_delta", "trade", "tick")
+
+    def stop(self) -> None:
+        subs = getattr(self, "_subs", ("dom_snapshot", "dom_delta", "trade", "tick"))
+        for et in subs:
+            self.bus.unsubscribe(et, self.on_event)
 
     def on_event(self, evt: MarketEvent) -> None:
         symbol = evt.symbol

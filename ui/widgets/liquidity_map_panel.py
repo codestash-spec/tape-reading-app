@@ -4,6 +4,7 @@ from PySide6 import QtWidgets, QtGui, QtCore
 from ui import helpers
 from ui.themes import brand
 from ui.event_bridge import EventBridge
+from ui.state import UIState
 
 
 class LiquidityMapPanel(QtWidgets.QWidget):
@@ -29,7 +30,7 @@ class LiquidityMapPanel(QtWidgets.QWidget):
         self.update()
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
-        if helpers.UI_UPDATE_PAUSED:
+        if UIState.is_paused():
             return
         if not self.resting:
             return

@@ -17,6 +17,11 @@ class SimpleStrategyEngine:
         self.delta_threshold = delta_threshold
         self.bus.subscribe("delta_update", self.on_delta)
         self.log = logging.getLogger(__name__)
+        self._subs = ("delta_update",)
+
+    def stop(self) -> None:
+        for et in getattr(self, "_subs", ()):
+            self.bus.unsubscribe(et, self.on_delta)
 
     def on_delta(self, evt: MarketEvent) -> None:
         payload = evt.payload or {}

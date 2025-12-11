@@ -19,6 +19,11 @@ class OHLCEngine:
         self.buckets: Dict[str, Dict[str, Any]] = {}
         self.bus.subscribe("trade", self.on_trade)
         self.bus.subscribe("quote", self.on_quote)
+        self._subs = ("trade", "quote")
+
+    def stop(self) -> None:
+        for et in getattr(self, "_subs", ()):
+            self.bus.unsubscribe(et, self.on_trade if et == "trade" else self.on_quote)
 
     def _bucket_key(self, ts: datetime) -> int:
         return int(ts.timestamp()) // self.tf

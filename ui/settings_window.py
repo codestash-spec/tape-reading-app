@@ -87,11 +87,24 @@ class SettingsWindow(QtWidgets.QDialog):
 
     def _build_exec_tab(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
+        self.exec_mode = QtWidgets.QComboBox()
+        self.exec_mode.addItems(["SIM", "MT5"])
         self.slippage = QtWidgets.QDoubleSpinBox()
         self.slippage.setSuffix(" bps")
         self.slippage.setMaximum(10000)
+        self.mt5_symbol = QtWidgets.QLineEdit("BTCUSD")
+        self.mt5_volume = QtWidgets.QDoubleSpinBox()
+        self.mt5_volume.setDecimals(3)
+        self.mt5_volume.setMaximum(1000.0)
+        self.mt5_volume.setValue(0.01)
+        self.mt5_dry_run = QtWidgets.QCheckBox()
+        self.mt5_dry_run.setChecked(True)
         layout = QtWidgets.QFormLayout(w)
+        layout.addRow("Execution mode", self.exec_mode)
         layout.addRow("Slippage tolerance", self.slippage)
+        layout.addRow("MT5 Symbol (BTC)", self.mt5_symbol)
+        layout.addRow("MT5 Volume (lots)", self.mt5_volume)
+        layout.addRow("MT5 Dry Run", self.mt5_dry_run)
         return w
 
     def _build_log_tab(self) -> QtWidgets.QWidget:
@@ -128,7 +141,13 @@ class SettingsWindow(QtWidgets.QDialog):
                         "max_exposure": self.max_exposure.value(),
                         "throttle_max": self.throttle.value(),
                     },
-                    "execution": {"slippage_bps": self.slippage.value()},
+                    "execution": {
+                        "mode": self.exec_mode.currentText().lower(),
+                        "slippage_bps": self.slippage.value(),
+                        "mt5_symbol_btc": self.mt5_symbol.text().strip(),
+                        "mt5_volume_btc": self.mt5_volume.value(),
+                        "dry_run": self.mt5_dry_run.isChecked(),
+                    },
                     "log_level": self.log_level.currentText(),
                     "performance": {"buffer": self.buffer.value(), "update_freq": self.update_freq.value()},
                 }

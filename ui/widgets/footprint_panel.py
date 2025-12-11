@@ -39,6 +39,7 @@ class _FootprintCanvas(QtWidgets.QWidget):
         super().__init__(parent)
         self.model = model
         self.model.changed.connect(self.update)
+        self.setFont(QtGui.QFont(brand.FONT_FAMILY, brand.FONT_MEDIUM))
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
         painter = QtGui.QPainter(self)
@@ -65,6 +66,10 @@ class _FootprintCanvas(QtWidgets.QWidget):
                 sell_int = min(1.0, sell / max_vol)
                 delta_color = QtGui.QColor("#12d8fa") if delta >= 0 else QtGui.QColor("#ff5f56")
                 delta_color.setAlphaF(0.1 + 0.8 * min(1.0, abs(delta) / max_vol))
+                # imbalance gradient overlay
+                imb_alpha = 0.1 + 0.9 * imb
+                imb_color = QtGui.QColor("#12d8fa") if buy > sell else QtGui.QColor("#ff5f56")
+                imb_color.setAlphaF(imb_alpha)
 
                 # buy cell
                 buy_rect = QtCore.QRect(0, y, cell_w, cell_h - 1)
@@ -84,6 +89,7 @@ class _FootprintCanvas(QtWidgets.QWidget):
                 # delta/imbalance cell
                 delta_rect = QtCore.QRect(cell_w * 2, y, cell_w, cell_h - 1)
                 painter.fillRect(delta_rect, delta_color)
+                painter.fillRect(delta_rect, imb_color)
                 painter.drawText(
                     delta_rect.adjusted(4, 0, -4, 0),
                     QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft,

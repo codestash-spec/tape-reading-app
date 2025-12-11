@@ -10,11 +10,12 @@ from ui.themes import brand
 
 
 class TapeTableModel(QtCore.QAbstractTableModel):
-    HEADERS = ["Time", "Price", "Size", "Side", "Flags"]
+    HEADERS = ["Time", "Price", "Size", "CumSize", "Side", "Flags"]
 
     def __init__(self, max_rows: int = 2000) -> None:
         super().__init__()
         self.rows: Deque[list] = deque(maxlen=max_rows)
+        self.cum_size: float = 0.0
 
     def rowCount(self, parent=QtCore.QModelIndex()) -> int:  # type: ignore[override]
         return len(self.rows)
@@ -48,9 +49,10 @@ class TapeTableModel(QtCore.QAbstractTableModel):
             size = float(trade.get("size", 0.0))
         except Exception:
             size = 0.0
+        self.cum_size += size
         side = trade.get("side", trade.get("aggressor", "?"))
         flags = trade.get("flags", "")
-        row = [ts, price, f"{size:.0f}", side, flags]
+        row = [ts, price, f"{size:.0f}", f"{self.cum_size:.0f}", side, flags]
         self.beginResetModel()
         self.rows.appendleft(row)
         self.endResetModel()
@@ -122,12 +124,46 @@ class TapePanel(QtWidgets.QWidget):
         self._throttle.setInterval(int(1000 / 60))
         self._throttle.timeout.connect(self._flush)
         self._throttle.start()
+        self._best_bid: float | None = None
+        self._best_ask: float | None = None
 
     def connect_bridge(self, bridge: EventBridge) -> None:
         bridge.tapeUpdated.connect(self.queue_trade)
+        bridge.domUpdated.connect(self._on_dom)
+
+    def _on_dom(self, dom: Dict[str, Any]) -> None:
+        ladder = dom.get("ladder") or dom.get("dom") or dom.get("levels") or []
+        best_bid = None
+        best_ask = None
+        if isinstance(ladder, dict):
+            for price, entry in ladder.items():
+                try:
+                    p = float(price)
+                    b = float(entry.get("bid", 0.0))
+                    a = float(entry.get("ask", 0.0))
+                    if b > 0 and (best_bid is None or p > best_bid):
+                        best_bid = p
+                    if a > 0 and (best_ask is None or p < best_ask):
+                        best_ask = p
+                except Exception:
+                    continue
+        elif isinstance(ladder, list):
+            for level in ladder:
+                try:
+                    p = float(level.get("price"))
+                    b = float(level.get("bid", level.get("bid_size", 0.0)))
+                    a = float(level.get("ask", level.get("ask_size", 0.0)))
+                    if b > 0 and (best_bid is None or p > best_bid):
+                        best_bid = p
+                    if a > 0 and (best_ask is None or p < best_ask):
+                        best_ask = p
+                except Exception:
+                    continue
+        self._best_bid = best_bid
+        self._best_ask = best_ask
 
     def queue_trade(self, trade: Dict[str, Any]) -> None:
-        side = trade.get("side") or trade.get("aggressor") or "?"
+        side = trade.get("side") or trade.get("aggressor") or self._infer_side(trade)
         try:
             size = float(trade.get("size", 0.0))
         except Exception:
@@ -152,11 +188,13 @@ class TapePanel(QtWidgets.QWidget):
         self.model.beginResetModel()
         for trade in batch:
             size = trade.get("_size_float", 0.0)
+            self.model.cum_size += size
             self.model.rows.appendleft(
                 [
                     trade.get("ts") or trade.get("time") or "",
                     f"{float(trade.get('price', 0.0)):.3f}" if isinstance(trade.get("price", None), (int, float)) else trade.get("price", ""),
                     f"{size:.0f}",
+                    f"{self.model.cum_size:.0f}",
                     trade.get("side", trade.get("aggressor", "?")),
                     trade.get("flags", ""),
                 ]
@@ -166,3 +204,14 @@ class TapePanel(QtWidgets.QWidget):
         if self._recent_sizes:
             avg_speed = sum(self._recent_sizes) / len(self._recent_sizes)
             self.speed_bar.setValue(min(100, int(avg_speed)))
+
+    def _infer_side(self, trade: Dict[str, Any]) -> str:
+        try:
+            price = float(trade.get("price", 0.0))
+        except Exception:
+            return "unknown"
+        if self._best_ask and price >= self._best_ask:
+            return "buy"
+        if self._best_bid and price <= self._best_bid:
+            return "sell"
+        return "unknown"

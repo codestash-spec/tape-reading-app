@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6 import QtWidgets, QtGui, QtCore
 from ui import helpers
-
+from ui.themes import brand
 from ui.event_bridge import EventBridge
 
 
@@ -12,6 +12,7 @@ class LiquidityMapPanel(QtWidgets.QWidget):
         self.resting = {}
         self.setMinimumHeight(120)
         self._pending = None
+        self._max_history = 50
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(int(1000 / 60))
         self._timer.timeout.connect(self.update)
@@ -45,14 +46,19 @@ class LiquidityMapPanel(QtWidgets.QWidget):
                 ask = entry.get("ask", 0.0)
                 bid_w = int((bid / max_liq) * (w / 2))
                 ask_w = int((ask / max_liq) * (w / 2))
+                # bid gradient
                 bid_rect = QtCore.QRect((w // 2) - bid_w, y, bid_w, bar_h - 1)
+                bid_grad = QtGui.QLinearGradient(bid_rect.topLeft(), bid_rect.topRight())
+                bid_grad.setColorAt(0, QtGui.QColor("#0a3a53"))
+                bid_grad.setColorAt(1, QtGui.QColor(18, 216, 250))
+                painter.fillRect(bid_rect, bid_grad)
+                # ask gradient
                 ask_rect = QtCore.QRect(w // 2, y, ask_w, bar_h - 1)
-                bid_color = QtGui.QColor(18, 216, 250)
-                ask_color = QtGui.QColor(255, 95, 86)
-                bid_color.setAlphaF(0.1 + 0.9 * (bid / max_liq))
-                ask_color.setAlphaF(0.1 + 0.9 * (ask / max_liq))
-                painter.fillRect(bid_rect, bid_color)
-                painter.fillRect(ask_rect, ask_color)
+                ask_grad = QtGui.QLinearGradient(ask_rect.topLeft(), ask_rect.topRight())
+                ask_grad.setColorAt(0, QtGui.QColor(255, 95, 86))
+                ask_grad.setColorAt(1, QtGui.QColor("#5a1a1a"))
+                painter.fillRect(ask_rect, ask_grad)
+                # label
                 painter.setPen(QtGui.QPen(QtGui.QColor("#8aa0b4")))
                 painter.drawText(0, y, w, bar_h, QtCore.Qt.AlignCenter, f"{p}")
                 y += bar_h

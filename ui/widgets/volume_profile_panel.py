@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6 import QtWidgets, QtGui, QtCore
 from ui import helpers
-
+from ui.themes import brand
 from ui.event_bridge import EventBridge
 
 
@@ -47,15 +47,19 @@ class VolumeProfilePanel(QtWidgets.QWidget):
                 vol = self.profile[price]
                 width = int((vol / max_vol) * (w * 0.9))
                 rect = QtCore.QRect(0, y - bar_h, width, bar_h - 1)
-                color = QtGui.QColor(18, 216, 250)
-                color.setAlphaF(0.15 + 0.75 * (vol / max_vol))
-                painter.fillRect(rect, color)
+                grad = QtGui.QLinearGradient(rect.topLeft(), rect.topRight())
+                grad.setColorAt(0, QtGui.QColor("#0a3a53"))
+                grad.setColorAt(1, QtGui.QColor(18, 216, 250))
+                painter.fillRect(rect, grad)
+                # Value Area shading
+                if price in self.value_area:
+                    va_color = QtGui.QColor("#7cffc4")
+                    va_color.setAlphaF(0.25)
+                    painter.fillRect(rect, va_color)
+                # POC line
                 if price == self.poc:
                     painter.setPen(QtGui.QPen(QtGui.QColor("#ffd700"), 2))
                     painter.drawLine(rect.right(), y - bar_h, rect.right(), y)
-                if price in self.value_area:
-                    painter.setPen(QtGui.QPen(QtGui.QColor("#7cffc4"), 1, QtCore.Qt.DashLine))
-                    painter.drawRect(rect)
                 y -= bar_h
         finally:
             painter.end()

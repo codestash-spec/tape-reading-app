@@ -78,6 +78,20 @@ class EventBridge(QtCore.QObject):
         et = evt.event_type
         payload = self._sanitize(evt.payload or {})
         if et == "dom_snapshot":
+            if "bids" in payload or "asks" in payload:
+                ladder: Dict[str, Dict[str, float]] = {}
+                for side_key, is_bid in (("bids", True), ("asks", False)):
+                    for level in payload.get(side_key, []):
+                        price = level.get("price")
+                        size = level.get("size")
+                        if price is None or size is None:
+                            continue
+                        entry = ladder.setdefault(str(price), {"bid": 0.0, "ask": 0.0, "liquidity": 0.0})
+                        if is_bid:
+                            entry["bid"] = size
+                        else:
+                            entry["ask"] = size
+                payload["ladder"] = ladder
             self.domUpdated.emit(payload)
         elif et == "dom_delta":
             self.domUpdated.emit(payload)

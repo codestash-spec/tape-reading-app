@@ -34,7 +34,10 @@ class DeltaPanel(QtWidgets.QWidget):
         bridge.microstructureUpdated.connect(self.update_from_snapshot)
 
     def update_delta(self, data: Dict) -> None:
-        value = float(data.get("cumulative_delta", data.get("delta", 0.0)) or 0.0)
+        try:
+            value = float(data.get("cumulative_delta", data.get("delta", 0.0)) or 0.0)
+        except Exception:
+            return
         self.model.append_delta(datetime.now(timezone.utc), value)
 
     def update_from_snapshot(self, snapshot: Dict) -> None:

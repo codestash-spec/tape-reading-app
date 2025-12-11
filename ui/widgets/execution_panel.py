@@ -54,8 +54,11 @@ class ExecutionPanel(QtWidgets.QWidget):
         if eta:
             self.queue_label.setText(f"Queue ETA: {eta}s")
         slip = evt.get("slippage_bps")
-        if slip is not None:
-            self.slippage_label.setText(f"Slippage tol: {float(slip):.2f}bps")
+        try:
+            if slip is not None:
+                self.slippage_label.setText(f"Slippage tol: {float(slip):.2f}bps")
+        except Exception:
+            pass
 
     def _on_cancel_clicked(self) -> None:
         if not self._cancel_callback:

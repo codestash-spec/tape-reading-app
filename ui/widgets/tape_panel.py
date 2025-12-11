@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Deque, Dict
 
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 from ui.event_bridge import EventBridge
 from ui.models import TapeTableModel
@@ -41,7 +41,16 @@ class TapePanel(QtWidgets.QWidget):
 
     def append_trade(self, trade: Dict) -> None:
         self.model.append_trade(trade)
-        self._last_trades.append(trade.get("size", 0))
+        try:
+            self._last_trades.append(float(trade.get("size", 0)))
+        except Exception:
+            self._last_trades.append(0.0)
+        # cap rows to avoid unbounded growth
+        max_rows = 1000
+        if len(self.model.rows) > max_rows:
+            self.model.beginRemoveRows(QtCore.QModelIndex(), max_rows, len(self.model.rows) - 1)
+            del self.model.rows[max_rows:]
+            self.model.endRemoveRows()
         if self._last_trades:
             avg_speed = sum(self._last_trades) / len(self._last_trades)
             val = min(100, int(avg_speed))

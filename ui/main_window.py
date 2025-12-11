@@ -48,8 +48,12 @@ class _ExecutionChart(QtWidgets.QWidget):
         mid = snap.get("mid") or snap.get("price")
         if mid is None:
             return
+        try:
+            mid_f = float(mid)
+        except Exception:
+            return
         self.ts.append(len(self.ts))
-        self.prices.append(float(mid))
+        self.prices.append(mid_f)
         self.price_curve.setData(self.ts, self.prices)
 
     def on_order(self, evt: dict) -> None:

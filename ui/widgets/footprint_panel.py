@@ -79,4 +79,13 @@ class FootprintPanel(QtWidgets.QWidget):
     def update_from_snapshot(self, snapshot: Dict) -> None:
         fp = snapshot.get("footprint") or {}
         if fp:
-            self.update_footprint(fp)
+            clean = {}
+            for price, vols in fp.items():
+                try:
+                    price_f = float(price)
+                    buy = float(vols.get("buy", 0.0))
+                    sell = float(vols.get("sell", 0.0))
+                except Exception:
+                    continue
+                clean[price_f] = {"buy": buy, "sell": sell}
+            self.update_footprint(clean)

@@ -25,8 +25,10 @@ class MarketWatchPanel(QtWidgets.QWidget):
         self.watchlists = self._load_watchlists()
         self.favorites: set[str] = set()
 
-        self.table = QtWidgets.QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["Symbol", "Last", "Chg%", "Provider", "Apply", "★"])
+        self.table = QtWidgets.QTableWidget(0, 10)
+        self.table.setHorizontalHeaderLabels(
+            ["Symbol", "Last", "Δ", "Chg%", "Spread", "Vol24h", "Depth", "Latency", "Provider", "Apply/★"]
+        )
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
@@ -80,17 +82,23 @@ class MarketWatchPanel(QtWidgets.QWidget):
         row = self.table.rowCount()
         self.table.insertRow(row)
         self.table.setItem(row, 0, QtWidgets.QTableWidgetItem(symbol))
-        self.table.setItem(row, 1, QtWidgets.QTableWidgetItem("-"))
-        self.table.setItem(row, 2, QtWidgets.QTableWidgetItem("-"))
-        self.table.setItem(row, 3, QtWidgets.QTableWidgetItem(provider))
-
+        for col in range(1, 9):
+            self.table.setItem(row, col, QtWidgets.QTableWidgetItem("-"))
         apply_btn = QtWidgets.QPushButton("Apply")
         apply_btn.clicked.connect(lambda _, s=symbol: self.instrumentSelected.emit(s))
-        self.table.setCellWidget(row, 4, apply_btn)
-
         fav_btn = QtWidgets.QPushButton("☆")
         fav_btn.clicked.connect(lambda _, s=symbol: self._toggle_fav(s, fav_btn))
-        self.table.setCellWidget(row, 5, fav_btn)
+        cell_widget = QtWidgets.QWidget()
+        hl = QtWidgets.QHBoxLayout()
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.addWidget(apply_btn)
+        hl.addWidget(fav_btn)
+        hl.addStretch()
+        cell_widget.setLayout(hl)
+        self.table.setCellWidget(row, 9, cell_widget)
+        # sizing
+        self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setStretchLastSection(True)
 
     def _toggle_fav(self, symbol: str, btn: QtWidgets.QPushButton) -> None:
         if symbol in self.favorites:
@@ -126,7 +134,16 @@ class MarketWatchPanel(QtWidgets.QWidget):
             self._bridge.bus.unsubscribe("quote", self._on_quote)
             self._bridge = None
 
-    def _update_price(self, symbol: str, price: float, provider: Optional[str] = None) -> None:
+    def _update_price(
+        self,
+        symbol: str,
+        price: float,
+        provider: Optional[str] = None,
+        spread: Optional[float] = None,
+        vol24h: Optional[float] = None,
+        latency: Optional[float] = None,
+        depth: Optional[str] = None,
+    ) -> None:
         for row in range(self.table.rowCount()):
             if self.table.item(row, 0).text() == symbol:
                 last_item = self.table.item(row, 1)
@@ -136,15 +153,25 @@ class MarketWatchPanel(QtWidgets.QWidget):
                 except Exception:
                     prev_val = price
                 last_item.setText(f"{price:.2f}")
+                delta = price - prev_val
                 chg = ((price - prev_val) / prev_val * 100) if prev_val else 0.0
-                chg_item = self.table.item(row, 2)
-                chg_item.setText(f"{chg:.2f}%")
+                self.table.item(row, 2).setText(f"{delta:+.2f}")
+                chg_item = self.table.item(row, 3)
+                chg_item.setText(f"{chg:+.2f}%")
                 if chg > 0:
                     chg_item.setForeground(QtCore.Qt.green)
                 elif chg < 0:
                     chg_item.setForeground(QtCore.Qt.red)
+                if spread is not None:
+                    self.table.item(row, 4).setText(f"{spread:.5f}")
+                if vol24h is not None:
+                    self.table.item(row, 5).setText(f"{vol24h:.0f}")
+                if depth is not None:
+                    self.table.item(row, 6).setText(depth)
+                if latency is not None:
+                    self.table.item(row, 7).setText(f"{latency:.1f}ms")
                 if provider:
-                    prov_item = self.table.item(row, 3)
+                    prov_item = self.table.item(row, 8)
                     if prov_item:
                         prov_item.setText(provider)
                 break
@@ -163,7 +190,18 @@ class MarketWatchPanel(QtWidgets.QWidget):
         if price is None:
             return
         source = getattr(evt, "source", None) or evt.payload.get("provider")
-        self._update_price(sym, float(price), provider=source)
+        spread = None
+        try:
+            bid = float(evt.payload.get("bid", 0.0))
+            ask = float(evt.payload.get("ask", 0.0))
+            if bid and ask:
+                spread = ask - bid
+        except Exception:
+            spread = None
+        vol24h = evt.payload.get("volume")
+        latency = evt.payload.get("latency_ms")
+        depth = evt.payload.get("depth")
+        self._update_price(sym, float(price), provider=source, spread=spread, vol24h=vol24h, latency=latency, depth=depth)
 
     def _on_cell_clicked(self, row: int, col: int) -> None:
         if col == 0:

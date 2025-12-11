@@ -60,6 +60,9 @@ class VolumeProfilePanel(QtWidgets.QWidget):
                 if price == self.poc:
                     painter.setPen(QtGui.QPen(QtGui.QColor("#ffd700"), 2))
                     painter.drawLine(rect.right(), y - bar_h, rect.right(), y)
+                # Price labels on left margin
+                painter.setPen(QtGui.QPen(QtGui.QColor("#8aa0b4")))
+                painter.drawText(QtCore.QRect(0, y - bar_h, w, bar_h), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, f"{price:.2f}")
                 y -= bar_h
         finally:
             painter.end()

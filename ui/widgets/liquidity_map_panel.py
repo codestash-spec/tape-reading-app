@@ -10,6 +10,7 @@ class LiquidityMapPanel(QtWidgets.QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.resting = {}
+        self.prev_resting = {}
         self.setMinimumHeight(120)
         self._pending = None
         self._max_history = 50
@@ -23,6 +24,7 @@ class LiquidityMapPanel(QtWidgets.QWidget):
 
     def _on_liq(self, evt):
         self._pending = evt.payload
+        self.prev_resting = self.resting
         self.resting = evt.payload.get("resting", {})
         self.update()
 
@@ -58,6 +60,18 @@ class LiquidityMapPanel(QtWidgets.QWidget):
                 ask_grad.setColorAt(0, QtGui.QColor(255, 95, 86))
                 ask_grad.setColorAt(1, QtGui.QColor("#5a1a1a"))
                 painter.fillRect(ask_rect, ask_grad)
+                # change overlay vs previous snapshot (intense zones)
+                prev = self.prev_resting.get(p, {})
+                d_bid = bid - prev.get("bid", 0.0)
+                d_ask = ask - prev.get("ask", 0.0)
+                if abs(d_bid) > 0:
+                    delta_color = QtGui.QColor("#12d8fa") if d_bid > 0 else QtGui.QColor("#0a3a53")
+                    delta_color.setAlphaF(min(0.9, 0.2 + 0.8 * abs(d_bid) / max_liq))
+                    painter.fillRect(bid_rect, delta_color)
+                if abs(d_ask) > 0:
+                    delta_color = QtGui.QColor("#ff5f56") if d_ask > 0 else QtGui.QColor("#5a1a1a")
+                    delta_color.setAlphaF(min(0.9, 0.2 + 0.8 * abs(d_ask) / max_liq))
+                    painter.fillRect(ask_rect, delta_color)
                 # label
                 painter.setPen(QtGui.QPen(QtGui.QColor("#8aa0b4")))
                 painter.drawText(0, y, w, bar_h, QtCore.Qt.AlignCenter, f"{p}")

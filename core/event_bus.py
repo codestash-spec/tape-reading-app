@@ -40,9 +40,13 @@ class EventBus:
         """
         with self._lock:
             if isinstance(event_type, str):
+                if callback in self._subscribers[event_type]:
+                    logging.getLogger(__name__).warning("[EventBus] duplicate callback detected for %s", event_type)
                 self._subscribers[event_type].append(callback)
             else:
                 for et in event_type:
+                    if callback in self._subscribers[et]:
+                        logging.getLogger(__name__).warning("[EventBus] duplicate callback detected for %s", et)
                     self._subscribers[et].append(callback)
 
     def unsubscribe(self, event_type: str | Iterable[str], callback: Callback) -> None:

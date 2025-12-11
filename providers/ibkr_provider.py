@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from providers.provider_base import ProviderBase
 from models.market_event import MarketEvent
+import logging
 
 
 class IBKRProvider(ProviderBase):
@@ -19,6 +20,7 @@ class IBKRProvider(ProviderBase):
 
     def stop(self) -> None:
         self._stop_thread()
+        logging.getLogger(__name__).info("[IBKRProvider] stopped.")
 
     def subscribe_dom(self) -> None:
         return
@@ -53,11 +55,13 @@ class IBKRProvider(ProviderBase):
             "ladder": ladder,
             "last": raw.get("bid", 0.0),
         }
+        if self.debug:
+            logging.getLogger(__name__).debug("[IBKRProvider] normalize_dom raw=%s payload=%s", raw, payload)
         return MarketEvent(event_type="dom_snapshot", timestamp=ts, source="ibkr", symbol=self.symbol, payload=payload)
 
     def normalize_trade(self, raw: Any) -> MarketEvent:
         ts = datetime.now(timezone.utc)
-        return MarketEvent(
+        evt = MarketEvent(
             event_type="trade",
             timestamp=ts,
             source="ibkr",
@@ -68,3 +72,6 @@ class IBKRProvider(ProviderBase):
                 "side": raw.get("side", "unknown"),
             },
         )
+        if self.debug:
+            logging.getLogger(__name__).debug("[IBKRProvider] normalize_trade raw=%s evt=%s", raw, evt)
+        return evt

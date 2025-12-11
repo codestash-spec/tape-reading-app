@@ -52,6 +52,7 @@ class ProviderManager:
             self.active_provider.stop()
         self.active_provider = None
         self.active_name = None
+        self.log.info("[ProviderManager] Provider stopped.")
 
     def switch(self, name: str) -> None:
         self.start(name)

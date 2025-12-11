@@ -25,3 +25,4 @@ ui:
   mode: sim
   provider: SIM
   dom_depth: 20
+  provider_debug: false

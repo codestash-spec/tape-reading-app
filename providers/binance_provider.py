@@ -49,11 +49,14 @@ class BinanceProvider(ProviderBase):
         dom = raw.get("dom", [])
         ladder = {str(level["price"]): {"bid": level.get("bid_size", 0.0), "ask": level.get("ask_size", 0.0)} for level in dom}
         payload = {"dom": dom, "ladder": ladder, "last": raw.get("last")}
+        if self.debug:
+            import logging
+            logging.getLogger(__name__).debug("[BinanceProvider] normalize_dom raw=%s payload=%s", raw, payload)
         return MarketEvent(event_type="dom_snapshot", timestamp=ts, source="binance", symbol=self.symbol, payload=payload)
 
     def normalize_trade(self, raw: Any) -> MarketEvent:
         ts = datetime.now(timezone.utc)
-        return MarketEvent(
+        evt = MarketEvent(
             event_type="trade",
             timestamp=ts,
             source="binance",
@@ -64,3 +67,7 @@ class BinanceProvider(ProviderBase):
                 "side": raw.get("side", "unknown"),
             },
         )
+        if self.debug:
+            import logging
+            logging.getLogger(__name__).debug("[BinanceProvider] normalize_trade raw=%s evt=%s", raw, evt)
+        return evt

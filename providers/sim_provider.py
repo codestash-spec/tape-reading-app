@@ -44,6 +44,10 @@ class SimProvider(ProviderBase):
             trade_raw = {"price": mid, "size": random.randint(1, 20), "side": random.choice(["buy", "sell"])}
             self.bus.publish(self.normalize_dom(dom_raw))
             self.bus.publish(self.normalize_trade(trade_raw))
+            if self.debug:
+                import logging
+
+                logging.getLogger(__name__).debug("[SIM] dom=%s trade=%s", dom_raw, trade_raw)
             time.sleep(0.25)
 
     def normalize_dom(self, raw: Any) -> MarketEvent:

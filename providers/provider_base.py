@@ -20,6 +20,8 @@ class ProviderBase(ABC):
         self.symbol = symbol
         self._thread: threading.Thread | None = None
         self._running = False
+        self._subscriptions: list[tuple[str, Any]] = []
+        self.debug = bool(self.settings.get("ui", {}).get("provider_debug", False)) if isinstance(self.settings, dict) else False
 
     @abstractmethod
     def start(self) -> None:
@@ -28,6 +30,10 @@ class ProviderBase(ABC):
     @abstractmethod
     def stop(self) -> None:
         self._stop_thread()
+        # unsubscribe any callbacks registered by provider
+        for et, cb in list(self._subscriptions):
+            self.bus.unsubscribe(et, cb)
+        self._subscriptions.clear()
 
     @abstractmethod
     def subscribe_dom(self) -> None:

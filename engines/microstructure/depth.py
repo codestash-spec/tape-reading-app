@@ -33,6 +33,9 @@ class DepthEngine:
         bid_size = float(payload.get("bid_size", payload.get("bid_qty", 0.0)) or 0.0)
         ask_size = float(payload.get("ask_size", payload.get("ask_qty", 0.0)) or 0.0)
         ladder = payload.get("ladder", {})
+        dom_list = payload.get("dom")
+        if dom_list:
+            ladder = {str(l.get("price")): {"bid": l.get("bid_size", 0.0), "ask": l.get("ask_size", 0.0)} for l in dom_list if l.get("price") is not None}
         my_order_qty = float(payload.get("my_order_qty", 0.0) or 0.0)
 
         st = self.state.get(symbol, DepthState())

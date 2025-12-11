@@ -52,8 +52,17 @@ class SettingsWindow(QtWidgets.QDialog):
         w = QtWidgets.QWidget()
         self.mode_combo = QtWidgets.QComboBox()
         self.mode_combo.addItems(["live", "paper", "replay", "sim"])
+        self.provider_combo = QtWidgets.QComboBox()
+        self.provider_combo.addItems(["SIM", "IBKR", "CME", "BINANCE", "OKX"])
+        self.dom_depth_combo = QtWidgets.QComboBox()
+        self.dom_depth_combo.addItems(["10", "20", "50", "100"])
+        self.delta_mode_combo = QtWidgets.QComboBox()
+        self.delta_mode_combo.addItems(["stream", "cumulative", "footprint"])
         layout = QtWidgets.QFormLayout(w)
         layout.addRow("Mode", self.mode_combo)
+        layout.addRow("Provider", self.provider_combo)
+        layout.addRow("DOM Depth", self.dom_depth_combo)
+        layout.addRow("Delta Mode", self.delta_mode_combo)
         return w
 
     def _build_risk_tab(self) -> QtWidgets.QWidget:
@@ -105,6 +114,9 @@ class SettingsWindow(QtWidgets.QDialog):
                 {
                     "theme": self.theme_combo.currentText(),
                     "mode": self.mode_combo.currentText(),
+                    "provider": self.provider_combo.currentText(),
+                    "dom_depth": int(self.dom_depth_combo.currentText()),
+                    "delta_mode": self.delta_mode_combo.currentText(),
                     "risk": {
                         "max_size": self.max_size.value(),
                         "max_exposure": self.max_exposure.value(),
@@ -116,4 +128,3 @@ class SettingsWindow(QtWidgets.QDialog):
                 }
             )
         self.accept()
-

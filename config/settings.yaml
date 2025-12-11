@@ -23,3 +23,5 @@ ui:
   theme: dark
   layout_profile: default
   mode: sim
+  provider: SIM
+  dom_depth: 20

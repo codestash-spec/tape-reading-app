@@ -11,11 +11,11 @@ import logging
 
 class IBKRProvider(ProviderBase):
     """
-    Placeholder IBKR provider (top-of-book). Uses simulated callbacks; integrate ibapi in future.
+    Placeholder IBKR provider with modes FX/CFD/FUTURES.
+    Uses synthetic data; replace _run with real ibapi calls when available.
     """
 
     def start(self) -> None:
-        # In this placeholder, just emit synthetic best bid/ask less frequently
         self._start_thread(self._run)
 
     def stop(self) -> None:
@@ -33,9 +33,20 @@ class IBKRProvider(ProviderBase):
 
     def _run(self) -> None:
         price = 100.0
+        depth_levels = 1 if self.settings.get("instrument_type", "FX") in ("FX", "CFD") else 10
         while self._running:
             price += 0.01
-            dom_raw = {"bid": price - 0.01, "ask": price + 0.01, "bid_size": 50, "ask_size": 40}
+            dom = []
+            if depth_levels == 1:
+                dom = [
+                    {"price": price - 0.01, "bid_size": 50, "ask_size": 0},
+                    {"price": price + 0.01, "bid_size": 0, "ask_size": 40},
+                ]
+            else:
+                for i in range(depth_levels):
+                    dom.append({"price": price - 0.01 * (i + 1), "bid_size": 50 - i, "ask_size": 0})
+                    dom.append({"price": price + 0.01 * (i + 1), "bid_size": 0, "ask_size": 40 - i})
+            dom_raw = {"dom": dom, "last": price}
             trade_raw = {"price": price, "size": 1, "side": "unknown"}
             self.bus.publish(self.normalize_dom(dom_raw))
             self.bus.publish(self.normalize_trade(trade_raw))

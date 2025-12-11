@@ -1,6 +1,9 @@
 env: dev
 symbols:
   - XAUUSD
+market_symbol: XAUUSD
+execution_symbol: XAUUSD
+execution_provider: SIM
 providers:
   ibkr:
     host: 127.0.0.1
@@ -26,3 +29,5 @@ ui:
   provider: SIM
   dom_depth: 20
   provider_debug: false
+  execution_debug: false
+  market_debug: false

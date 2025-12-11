@@ -33,7 +33,7 @@ def build_order_from_signal(signal_evt: MarketEvent, default_qty: float = 1.0) -
     qty = float(payload.get("metadata", {}).get("qty", default_qty))
     return OrderRequest(
         order_id=uuid.uuid4().hex,
-        symbol=signal_evt.symbol,
+        symbol=os.getenv("EXEC_SYMBOL", signal_evt.symbol),
         side=side,
         quantity=qty,
         order_type=OrderType.LIMIT if limit_price else OrderType.MARKET,
@@ -56,8 +56,16 @@ def main(argv: List[str] | None = None) -> int:
 
     bus = EventBus()
     symbols = settings.symbols
-    provider_manager = ProviderManager(bus, {"symbols": symbols, "dom_depth": settings.ui.get("dom_depth", 20)})
-    provider_manager.start(settings.ui.get("provider", "SIM"))
+    pm_settings = {
+        "symbols": symbols,
+        "market_symbol": settings.market_symbol,
+        "execution_symbol": settings.execution_symbol,
+        "execution_provider": settings.execution_provider,
+        "ui": settings.ui,
+        "instrument_type": None,
+    }
+    provider_manager = ProviderManager(bus, pm_settings)
+    autodetect = provider_manager.auto_start()
 
     # Engines and strategy
     micro = MicrostructureEngine(bus, symbols)

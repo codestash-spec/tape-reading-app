@@ -14,6 +14,9 @@ class Settings:
     ibkr_port: int
     ibkr_client_id: int
     symbols: List[str]
+    market_symbol: str
+    execution_symbol: str
+    execution_provider: str
     log_level: str
     risk_limits: Dict[str, Any]
     execution: Dict[str, Any]
@@ -47,6 +50,9 @@ def load_settings(base_path: str = "config/settings.yaml") -> Settings:
         os.getenv("IBKR_CLIENT_ID", base.get("providers", {}).get("ibkr", {}).get("client_id", 1))
     )
     symbols = base.get("symbols", ["XAUUSD"])
+    market_symbol = base.get("market_symbol", symbols[0] if symbols else "XAUUSD")
+    execution_symbol = base.get("execution_symbol", market_symbol)
+    execution_provider = base.get("execution_provider", "SIM")
     log_level = os.getenv("LOG_LEVEL", base.get("telemetry", {}).get("log_level", "INFO"))
 
     risk_limits = base.get("risk", {})
@@ -61,6 +67,9 @@ def load_settings(base_path: str = "config/settings.yaml") -> Settings:
         ibkr_port=ibkr_port,
         ibkr_client_id=ibkr_client_id,
         symbols=symbols,
+        market_symbol=market_symbol,
+        execution_symbol=execution_symbol,
+        execution_provider=execution_provider,
         log_level=log_level,
         risk_limits=risk_limits,
         execution=execution,

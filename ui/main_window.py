@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Callable, Optional
 
 import pyqtgraph as pg
@@ -71,11 +72,33 @@ class CandlestickItem(pg.GraphicsObject):
         return QtCore.QRectF()
 
 
+class TimeAxisItem(pg.AxisItem):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.times = []
+
+    def set_times(self, times):
+        self.times = times or []
+
+    def tickStrings(self, values, scale, spacing):
+        out = []
+        for v in values:
+            if not self.times:
+                out.append("")
+                continue
+            # map to closest time
+            closest = min(self.times, key=lambda t: abs(t - v)) if self.times else v
+            ts = time.strftime("%H:%M:%S", time.localtime(closest))
+            out.append(ts)
+        return out
+
+
 class _ExecutionChart(QtWidgets.QWidget):
     def __init__(self, bridge: EventBridge, parent=None) -> None:
         super().__init__(parent)
         self.bridge = bridge
-        self.plot = pg.PlotWidget(background=brand.BG_DARK)
+        self.time_axis = TimeAxisItem(orientation="bottom")
+        self.plot = pg.PlotWidget(background=brand.BG_DARK, axisItems={"bottom": self.time_axis})
         try:
             self.plot.setViewport(QtWidgets.QOpenGLWidget())
         except Exception:
@@ -90,6 +113,7 @@ class _ExecutionChart(QtWidgets.QWidget):
         self.prices: list[float] = []
         self.fills: list[dict] = []
         self.candles: list[dict] = []
+        self.candle_times: list[float] = []
         self.mode = "line"  # or "candles"
 
         # toggle buttons
@@ -137,7 +161,8 @@ class _ExecutionChart(QtWidgets.QWidget):
             mid_f = float(mid)
         except Exception:
             return
-        self.ts.append(len(self.ts))
+        now_ts = time.time()
+        self.ts.append(now_ts)
         self.prices.append(mid_f)
         if self.mode == "line":
             self.price_curve.setData(self.ts, self.prices)
@@ -158,6 +183,7 @@ class _ExecutionChart(QtWidgets.QWidget):
 
     def on_candle(self, bar: dict) -> None:
         self.candles.append(bar)
+        self.candle_times.append(bar.get("time", len(self.candles)))
         if self.mode == "candles":
             self._draw_candles()
 
@@ -180,9 +206,12 @@ class _ExecutionChart(QtWidgets.QWidget):
             return
         data = []
         candles = self.candles[-300:]
+        times = self.candle_times[-300:] if len(self.candle_times) >= len(candles) else list(range(len(candles)))
         for i, c in enumerate(candles):
-            data.append((i, c["open"], c["high"], c["low"], c["close"]))
+            x = times[i] if i < len(times) else i
+            data.append((x, c["open"], c["high"], c["low"], c["close"]))
         self.candle_item.setData(data)
+        self.time_axis.set_times(times)
 
     def _mouse_moved(self, evt) -> None:
         pos = evt[0]
@@ -193,11 +222,13 @@ class _ExecutionChart(QtWidgets.QWidget):
             self.vLine.setPos(x)
             self.hLine.setPos(y)
             # show price/time crosshair info
-            idx = int(round(x))
-            if 0 <= idx < len(self.candles):
-                c = self.candles[idx - (len(self.candles) - len(self.candles[-300:]))] if len(self.candles) > 300 else self.candles[idx]
+            if self.candle_times:
+                idx = min(range(len(self.candle_times)), key=lambda i: abs(self.candle_times[i] - x))
+                idx = max(0, min(idx, len(self.candles) - 1))
+                c = self.candles[idx]
+                t_fmt = time.strftime("%H:%M:%S", time.localtime(self.candle_times[idx]))
                 self.crosshair_info.setText(
-                    f"t={idx} O={c['open']:.2f} H={c['high']:.2f} L={c['low']:.2f} C={c['close']:.2f} | y={y:.2f}"
+                    f"{t_fmt} O={c['open']:.2f} H={c['high']:.2f} L={c['low']:.2f} C={c['close']:.2f} | y={y:.2f}"
                 )
 
 

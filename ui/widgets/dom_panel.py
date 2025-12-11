@@ -120,10 +120,16 @@ class DomPanel(QtWidgets.QWidget):
         self.mid_label = QtWidgets.QLabel("Mid: -  Spread: -")
         self.mid_label.setAlignment(QtCore.Qt.AlignLeft)
         self.mid_label.setStyleSheet("color: #e0e6ed;")
+        self.depth_label = QtWidgets.QLabel("Depth: -")
+        self.depth_label.setAlignment(QtCore.Qt.AlignRight)
+        hl_info = QtWidgets.QHBoxLayout()
+        hl_info.setContentsMargins(0, 0, 0, 0)
+        hl_info.addWidget(self.mid_label)
+        hl_info.addWidget(self.depth_label)
 
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.mid_label)
+        layout.addLayout(hl_info)
         layout.addWidget(self.view)
         layout.addWidget(self.heatmap)
         self.setLayout(layout)
@@ -187,7 +193,9 @@ class DomPanel(QtWidgets.QWidget):
                 elif isinstance(level, (list, tuple)) and len(level) >= 3:
                     add_row(level[0], level[1], level[2])
 
-        rows = sorted(rows, key=lambda r: r[0], reverse=True)[:100]
+        rows = sorted(rows, key=lambda r: r[0], reverse=True)
+        depth_limit = payload.get("depth_hint") or 100
+        rows = rows[: depth_limit if isinstance(depth_limit, int) else 100]
         self.model.update_rows(rows, last_price)
         # mid/spread display
         if rows:
@@ -198,7 +206,10 @@ class DomPanel(QtWidgets.QWidget):
             if best_bid and best_ask:
                 mid = (best_bid + best_ask) / 2
                 spread = best_ask - best_bid
-            self.mid_label.setText(f"Mid: {mid:.5f}" if mid else "Mid: - " + (f" Spread: {spread:.5f}" if spread else " Spread: -"))
+            mid_txt = f"Mid: {mid:.5f}" if mid else "Mid: -"
+            spread_txt = f"Spread: {spread:.5f}" if spread else "Spread: -"
+            self.mid_label.setText(f"{mid_txt}  {spread_txt}")
+            self.depth_label.setText(f"Depth: {len(rows)}")
         self._draw_heatmap(rows)
 
     def _draw_heatmap(self, rows: List[Tuple[float, float, float, float]]) -> None:
@@ -214,15 +225,18 @@ class DomPanel(QtWidgets.QWidget):
         row_h = max(2, h // len(rows))
         for i, (price, bid, ask, _) in enumerate(rows):
             y = i * row_h
-            bid_int = min(1.0, bid / max_size)
-            ask_int = min(1.0, ask / max_size)
-            bid_rect = QtCore.QRect(0, y, w // 2, row_h)
-            ask_rect = QtCore.QRect(w // 2, y, w // 2, row_h)
-            bid_color = QtGui.QColor(18, 216, 250)
-            bid_color.setAlphaF(0.1 + 0.9 * bid_int)
-            ask_color = QtGui.QColor(255, 95, 86)
-            ask_color.setAlphaF(0.1 + 0.9 * ask_int)
-            painter.fillRect(bid_rect, bid_color)
-            painter.fillRect(ask_rect, ask_color)
+            # Use gradient bars for bid/ask
+            bid_ratio = bid / max_size
+            ask_ratio = ask / max_size
+            bid_rect = QtCore.QRect(0, y, int((w // 2) * bid_ratio), row_h)
+            ask_rect = QtCore.QRect(w - int((w // 2) * ask_ratio), y, int((w // 2) * ask_ratio), row_h)
+            bid_gradient = QtGui.QLinearGradient(bid_rect.topLeft(), bid_rect.topRight())
+            bid_gradient.setColorAt(0, QtGui.QColor("#0a3a53"))
+            bid_gradient.setColorAt(1, QtGui.QColor(18, 216, 250))
+            painter.fillRect(bid_rect, bid_gradient)
+            ask_gradient = QtGui.QLinearGradient(ask_rect.topLeft(), ask_rect.topRight())
+            ask_gradient.setColorAt(0, QtGui.QColor(255, 95, 86))
+            ask_gradient.setColorAt(1, QtGui.QColor("#5a1a1a"))
+            painter.fillRect(ask_rect, ask_gradient)
         painter.end()
         self.heatmap.setPixmap(pix)

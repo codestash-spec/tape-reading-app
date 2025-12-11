@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from PySide6 import QtWidgets, QtGui, QtCore
+import pyqtgraph as pg
 
 from ui.event_bridge import EventBridge
+from ui.themes import brand
 
 
 class RegimePanel(QtWidgets.QWidget):
@@ -12,9 +14,14 @@ class RegimePanel(QtWidgets.QWidget):
         self.history: list[str] = []
         self.timeline = QtWidgets.QListWidget()
         self.timeline.setMaximumHeight(120)
+        self.plot = pg.PlotWidget(background=brand.BG_DARK)
+        self.plot.setMinimumHeight(60)
+        self.curve = self.plot.plot(pen=pg.mkPen("#7cffc4", width=1.5))
+        self.plot.showGrid(x=True, y=True, alpha=0.3)
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(self.label)
         layout.addWidget(self.timeline)
+        layout.addWidget(self.plot)
         self.setLayout(layout)
 
     def connect_bridge(self, bridge: EventBridge) -> None:
@@ -37,3 +44,4 @@ class RegimePanel(QtWidgets.QWidget):
             item = QtWidgets.QListWidgetItem(r)
             item.setForeground(QtGui.QBrush(QtGui.QColor(color)))
             self.timeline.addItem(item)
+        self.curve.setData(list(range(len(self.history))), [1 if r == "trending" else 0 if r == "ranging" else -1 for r in self.history])

@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6 import QtWidgets, QtCore, QtGui
 from ui.event_bridge import EventBridge
 from ui.themes import brand
+from ui import helpers
 
 
 class HeatmapPanel(QtWidgets.QWidget):
@@ -36,6 +37,8 @@ class HeatmapPanel(QtWidgets.QWidget):
         self.update()
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
+        if helpers.UI_UPDATE_PAUSED:
+            return
         painter = QtGui.QPainter(self)
         try:
             painter.fillRect(self.rect(), QtGui.QColor(brand.BG_PANEL))

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PySide6 import QtWidgets, QtGui, QtCore
+from ui import helpers
 
 from ui.event_bridge import EventBridge
 
@@ -29,6 +30,8 @@ class VolumeProfilePanel(QtWidgets.QWidget):
         self.update()
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
+        if helpers.UI_UPDATE_PAUSED:
+            return
         if not self.profile:
             return
         painter = QtGui.QPainter(self)

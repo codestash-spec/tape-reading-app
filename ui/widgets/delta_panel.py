@@ -9,6 +9,7 @@ from PySide6 import QtWidgets, QtCore
 
 from ui.event_bridge import EventBridge
 from ui.themes import brand
+from ui import helpers
 
 
 class DeltaPanel(QtWidgets.QWidget):
@@ -40,10 +41,35 @@ class DeltaPanel(QtWidgets.QWidget):
         self.setLayout(layout)
 
     def connect_bridge(self, bridge: EventBridge) -> None:
-        bridge.deltaUpdated.connect(self.update_delta)
-        bridge.microstructureUpdated.connect(self.update_from_snapshot)
+        bridge.deltaUpdated.connect(self.queue_delta)
+        bridge.microstructureUpdated.connect(self.queue_from_snapshot)
 
-    def update_delta(self, data: Dict) -> None:
+        self._pending_delta: Dict | None = None
+        self._pending_snapshot: Dict | None = None
+        self._throttle = QtCore.QTimer(self)
+        self._throttle.setInterval(int(1000 / 60))
+        self._throttle.timeout.connect(self._flush)
+        self._throttle.start()
+
+    def queue_delta(self, data: Dict) -> None:
+        self._pending_delta = data
+
+    def queue_from_snapshot(self, snapshot: Dict) -> None:
+        self._pending_snapshot = snapshot
+
+    def _flush(self) -> None:
+        if helpers.UI_UPDATE_PAUSED:
+            return
+        if self._pending_delta:
+            data = self._pending_delta
+            self._pending_delta = None
+            self._update_delta(data)
+        if self._pending_snapshot:
+            snap = self._pending_snapshot
+            self._pending_snapshot = None
+            self._update_from_snapshot(snap)
+
+    def _update_delta(self, data: Dict) -> None:
         now_ts = datetime.now(timezone.utc).timestamp()
         try:
             delta_val = float(data.get("delta", data.get("cumulative_delta", 0.0)) or 0.0)
@@ -54,7 +80,7 @@ class DeltaPanel(QtWidgets.QWidget):
         self.cvd.append((now_ts, last_cvd + delta_val))
         self._redraw()
 
-    def update_from_snapshot(self, snapshot: Dict) -> None:
+    def _update_from_snapshot(self, snapshot: Dict) -> None:
         now_ts = datetime.now(timezone.utc).timestamp()
         if "cumulative_delta" in snapshot:
             try:

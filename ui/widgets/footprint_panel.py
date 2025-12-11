@@ -5,6 +5,7 @@ from typing import Dict, Any
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ui.event_bridge import EventBridge
+from ui import helpers
 from ui.themes import brand
 
 
@@ -132,9 +133,7 @@ class FootprintPanel(QtWidgets.QWidget):
             self._pending = fp
 
     def _flush(self) -> None:
-        from ui.widgets.dom_panel import UI_UPDATE_PAUSED
-
-        if UI_UPDATE_PAUSED or self._pending is None:
+        if helpers.UI_UPDATE_PAUSED or self._pending is None:
             return
         data = self._pending
         self._pending = None

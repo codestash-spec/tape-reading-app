@@ -6,6 +6,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from ui.event_bridge import EventBridge
 from ui.themes import brand
+from ui import helpers
 
 
 class DomTableModel(QtCore.QAbstractTableModel):
@@ -93,9 +94,6 @@ class DomDelegate(QtWidgets.QStyledItemDelegate):
         return max(vals) if vals else 1.0
 
 
-UI_UPDATE_PAUSED = False
-
-
 class DomPanel(QtWidgets.QWidget):
     """
     DOM ladder with multiple levels, heatmap and last-price highlight.
@@ -132,11 +130,10 @@ class DomPanel(QtWidgets.QWidget):
         self._throttle.start()
 
     def eventFilter(self, obj, event):
-        global UI_UPDATE_PAUSED
         if event.type() in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseMove):
-            UI_UPDATE_PAUSED = True
+            helpers.pause_render()
         elif event.type() == QtCore.QEvent.MouseButtonRelease:
-            UI_UPDATE_PAUSED = False
+            helpers.resume_render()
         return super().eventFilter(obj, event)
 
     def connect_bridge(self, bridge: EventBridge) -> None:
@@ -146,8 +143,7 @@ class DomPanel(QtWidgets.QWidget):
         self._pending_payload = payload
 
     def _flush(self) -> None:
-        global UI_UPDATE_PAUSED
-        if UI_UPDATE_PAUSED or self._pending_payload is None:
+        if helpers.UI_UPDATE_PAUSED or self._pending_payload is None:
             return
         payload = self._pending_payload
         self._pending_payload = None

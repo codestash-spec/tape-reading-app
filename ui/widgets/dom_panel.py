@@ -139,6 +139,8 @@ class DomPanel(QtWidgets.QWidget):
         self._throttle.setInterval(int(1000 / 60))  # ~60 FPS
         self._throttle.timeout.connect(self._flush)
         self._throttle.start()
+        self._depth_hint = 100
+        self._trail = None  # rolling bookmap-style heatmap
 
     def eventFilter(self, obj, event):
         if event.type() in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseMove):
@@ -158,6 +160,7 @@ class DomPanel(QtWidgets.QWidget):
             return
         payload = self._pending_payload
         self._pending_payload = None
+        self._depth_hint = payload.get("depth_hint", self._depth_hint)
         ladder_raw = payload.get("ladder") or payload.get("levels") or payload.get("dom") or []
         last_price = None
         if "last" in payload or "mid" in payload or "price" in payload:
@@ -194,7 +197,7 @@ class DomPanel(QtWidgets.QWidget):
                     add_row(level[0], level[1], level[2])
 
         rows = sorted(rows, key=lambda r: r[0], reverse=True)
-        depth_limit = payload.get("depth_hint") or 100
+        depth_limit = payload.get("depth_hint") or self._depth_hint or 100
         rows = rows[: depth_limit if isinstance(depth_limit, int) else 100]
         self.model.update_rows(rows, last_price)
         # mid/spread display
@@ -215,28 +218,31 @@ class DomPanel(QtWidgets.QWidget):
     def _draw_heatmap(self, rows: List[Tuple[float, float, float, float]]) -> None:
         if not rows:
             return
-        h = self.heatmap.height() or 120
-        w = self.heatmap.width() or 300
-        pix = QtGui.QPixmap(w, h)
-        pix.fill(QtGui.QColor(0, 0, 0, 0))
-        painter = QtGui.QPainter(pix)
-        painter.fillRect(pix.rect(), QtGui.QColor(15, 27, 43))
+        h = self.heatmap.height() or 180
+        w = self.heatmap.width() or 360
+        row_h = 2  # temporal stripe height
+        # initialize trail pixmap
+        if self._trail is None or self._trail.width() != w or self._trail.height() != h:
+            self._trail = QtGui.QPixmap(w, h)
+            self._trail.fill(QtGui.QColor(15, 27, 43))
+        # scroll existing trail down
+        scrolled = QtGui.QPixmap(w, h)
+        scrolled.fill(QtGui.QColor(15, 27, 43))
+        painter = QtGui.QPainter(scrolled)
+        painter.drawPixmap(0, row_h, self._trail)
+        # draw newest stripe at top: map prices to x-axis, intensity by size
         max_size = max(max(r[1], r[2]) for r in rows) or 1.0
-        row_h = max(2, h // len(rows))
-        for i, (price, bid, ask, _) in enumerate(rows):
-            y = i * row_h
-            # Use gradient bars for bid/ask
-            bid_ratio = bid / max_size
-            ask_ratio = ask / max_size
-            bid_rect = QtCore.QRect(0, y, int((w // 2) * bid_ratio), row_h)
-            ask_rect = QtCore.QRect(w - int((w // 2) * ask_ratio), y, int((w // 2) * ask_ratio), row_h)
-            bid_gradient = QtGui.QLinearGradient(bid_rect.topLeft(), bid_rect.topRight())
-            bid_gradient.setColorAt(0, QtGui.QColor("#0a3a53"))
-            bid_gradient.setColorAt(1, QtGui.QColor(18, 216, 250))
-            painter.fillRect(bid_rect, bid_gradient)
-            ask_gradient = QtGui.QLinearGradient(ask_rect.topLeft(), ask_rect.topRight())
-            ask_gradient.setColorAt(0, QtGui.QColor(255, 95, 86))
-            ask_gradient.setColorAt(1, QtGui.QColor("#5a1a1a"))
-            painter.fillRect(ask_rect, ask_gradient)
+        prices = [r[0] for r in rows]
+        p_min, p_max = min(prices), max(prices)
+        span = p_max - p_min if p_max != p_min else 1.0
+        for price, bid, ask, _ in rows:
+            x = int(((price - p_min) / span) * (w - 1))
+            bid_alpha = int(30 + 200 * min(1.0, bid / max_size))
+            ask_alpha = int(30 + 200 * min(1.0, ask / max_size))
+            painter.setPen(QtGui.QPen(QtGui.QColor(18, 216, 250, bid_alpha)))
+            painter.drawLine(x, 0, x, row_h)
+            painter.setPen(QtGui.QPen(QtGui.QColor(255, 95, 86, ask_alpha)))
+            painter.drawLine(x, 0, x, row_h)
         painter.end()
-        self.heatmap.setPixmap(pix)
+        self._trail = scrolled
+        self.heatmap.setPixmap(self._trail)

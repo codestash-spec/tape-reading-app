@@ -110,6 +110,8 @@ def main(argv: List[str] | None = None) -> int:
         on_submit_order=router.submit,
         on_cancel_order=router.cancel,
         provider_manager=provider_manager,
+        event_bus=bus,
+        pm_settings=pm_settings,
     )
     window.resize(1400, 900)
     window.show()

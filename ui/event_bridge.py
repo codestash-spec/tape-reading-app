@@ -60,14 +60,6 @@ class EventBridge(QtCore.QObject):
             self._subscriptions.append(et)
         self._attach_logging()
 
-    def stop(self) -> None:
-        for et in self._subscriptions:
-            self.bus.unsubscribe(et, self._on_event)
-        self._subscriptions.clear()
-        if self._logger_handler:
-            logging.getLogger().removeHandler(self._logger_handler)
-            self._logger_handler = None
-
     def _sanitize(self, obj: Any) -> Any:
         if isinstance(obj, dict):
             return {str(k): self._sanitize(v) for k, v in obj.items()}
@@ -145,6 +137,9 @@ class EventBridge(QtCore.QObject):
             self.riskStatusUpdated.emit(payload)
         elif et == "metrics":
             self.metricsUpdated.emit(payload)
+        elif et == "log":
+            msg = payload.get("message") or payload.get("msg") or str(payload)
+            self.logReceived.emit(msg)
 
     def _attach_logging(self) -> None:
         if self._logger_handler:
@@ -156,6 +151,9 @@ class EventBridge(QtCore.QObject):
         self._logger_handler = handler
 
     def stop(self) -> None:
+        for et in list(self._subscriptions):
+            self.bus.unsubscribe(et, self._on_event)
+        self._subscriptions.clear()
         if self._logger_handler:
             logging.getLogger().removeHandler(self._logger_handler)
             self._logger_handler = None

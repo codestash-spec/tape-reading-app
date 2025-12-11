@@ -92,6 +92,8 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         on_submit_order: Optional[Callable] = None,
         on_cancel_order: Optional[Callable[[str], None]] = None,
         provider_manager=None,
+        event_bus=None,
+        pm_settings: Optional[dict] = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -99,6 +101,8 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.on_submit_order = on_submit_order
         self.on_cancel_order = on_cancel_order
         self.provider_manager = provider_manager
+        self.bus = event_bus
+        self.pm_settings = pm_settings or {}
         self.setWindowTitle("Bots Institucionais - Tape Reading")
         self.theme = Theme(theme_mode)
         self._apply_theme()
@@ -130,6 +134,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.regime_panel = RegimePanel()
         self.vol_panel = VolatilityPanel()
         self.market_watch = MarketWatchPanel()
+        self.market_watch.instrumentSelected.connect(self._switch_instrument)
         self.status_widget = StatusBarWidget()
 
         # Wire bridge
@@ -145,6 +150,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.vol_profile_panel.connect_bridge(bridge)
         self.regime_panel.connect_bridge(bridge)
         self.vol_panel.connect_bridge(bridge)
+        self.market_watch.connect_bridge(bridge)
         self.status_widget.connect_bridge(bridge, mode=mode)
 
         # DockArea layout
@@ -161,7 +167,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.area.addDock(Dock("VolumeProfile", widget=self.vol_profile_panel), "above", self.area.docks["Liquidity"])
         self.area.addDock(Dock("Regime", widget=self.regime_panel), "above", self.area.docks["VolumeProfile"])
         self.area.addDock(Dock("Volatility", widget=self.vol_panel), "above", self.area.docks["Regime"])
-        self.area.addDock(Dock("MarketWatch", widget=self.market_watch), "right", self.area.docks["Regime"])
+        self.area.addDock(Dock("MarketWatch", widget=self.market_watch), "left", self.area.docks["DOM"])
 
         self.statusBar().addPermanentWidget(self.status_widget)
 
@@ -242,6 +248,9 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         toolbar.addAction(help_act)
 
         self.addToolBar(QtCore.Qt.TopToolBarArea, toolbar)
+        # hotkeys
+        QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+1"), self, activated=lambda: self._cycle_watch(-1))
+        QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+2"), self, activated=lambda: self._cycle_watch(1))
 
     def _on_mode_change(self, mode: str) -> None:
         self.status_widget.mode_label.setText(f"Mode: {mode}")
@@ -277,6 +286,36 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
             # reset event bridge subscriptions to avoid duplicates
             self.bridge.stop()
             self.bridge.start()
+
+    def _cycle_watch(self, step: int) -> None:
+        total = self.market_watch.table.rowCount()
+        if total == 0:
+            return
+        row = self.market_watch.table.currentRow()
+        if row < 0:
+            row = 0
+        next_row = max(0, min(total - 1, row + step))
+        self.market_watch.table.selectRow(next_row)
+        sym_item = self.market_watch.table.item(next_row, 0)
+        if sym_item:
+            self._switch_instrument(sym_item.text())
+
+    def _switch_instrument(self, symbol: str) -> None:
+        if not self.bus:
+            return
+        # rebuild provider manager with new symbol
+        if self.provider_manager:
+            self.provider_manager.stop()
+        cfg = dict(self.pm_settings)
+        cfg["market_symbol"] = symbol
+        cfg["symbols"] = [symbol]
+        from providers.provider_manager import ProviderManager
+        self.provider_manager = ProviderManager(self.bus, cfg)
+        self.provider_manager.auto_start()
+        self.bridge.stop()
+        self.bridge.start()
+        self.status_widget.conn_label.setText(f"Conn: {self.provider_manager.active_name}")
+        self.statusBar().showMessage(f"[MarketWatch] User selected {symbol} (provider={self.provider_manager.active_name})", 3000)
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self.save_state()

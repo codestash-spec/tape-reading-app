@@ -52,17 +52,16 @@ class CandlestickItem(pg.GraphicsObject):
             self.picture = QtGui.QPicture()
             painter = QtGui.QPainter(self.picture)
             for (x, open_, high, low, close) in self.data:
-                if close >= open_:
-                    pen = pg.mkPen("#12d8fa")
-                    brush = pg.mkBrush("#12d8fa")
-                else:
-                    pen = pg.mkPen("#ff5f56")
-                    brush = pg.mkBrush("#ff5f56")
-                # wick
+                bullish = close >= open_
+                pen = pg.mkPen("#12d8fa" if bullish else "#ff5f56")
+                brush = pg.mkBrush("#12d8fa" if bullish else "#ff5f56")
                 painter.setPen(pen)
+                # wick
                 painter.drawLine(QtCore.QPointF(x, low), QtCore.QPointF(x, high))
                 # body
-                rect = QtCore.QRectF(x - 0.3, open_, 0.6, close - open_)
+                top = open_ if bullish else close
+                height = abs(close - open_)
+                rect = QtCore.QRectF(x - 0.3, top, 0.6, height if height > 0 else 0.01)
                 painter.fillRect(rect, brush)
                 painter.drawRect(rect)
             painter.end()
@@ -105,6 +104,9 @@ class _ExecutionChart(QtWidgets.QWidget):
         btn_bar.addWidget(btn_line)
         btn_bar.addWidget(btn_candles)
         btn_bar.addStretch()
+        self.crosshair_info = QtWidgets.QLabel("")
+        self.crosshair_info.setStyleSheet("color: #e0e6ed;")
+        btn_bar.addWidget(self.crosshair_info)
 
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
@@ -121,6 +123,11 @@ class _ExecutionChart(QtWidgets.QWidget):
         self.plot.addItem(self.vLine, ignoreBounds=True)
         self.plot.addItem(self.hLine, ignoreBounds=True)
         self.proxy = pg.SignalProxy(self.plot.scene().sigMouseMoved, rateLimit=60, slot=self._mouse_moved)
+        self.plot.plotItem.showGrid(x=True, y=True, alpha=0.3)
+        self.plot.plotItem.setMouseEnabled(x=True, y=True)
+        self.plot.plotItem.setMenuEnabled(False)
+        self.plot.plotItem.getAxis("left").setPen(pg.mkPen("#556"))
+        self.plot.plotItem.getAxis("bottom").setPen(pg.mkPen("#556"))
 
     def on_snapshot(self, snap: dict) -> None:
         mid = snap.get("mid") or snap.get("price")
@@ -172,7 +179,8 @@ class _ExecutionChart(QtWidgets.QWidget):
         if not self.candles:
             return
         data = []
-        for i, c in enumerate(self.candles[-300:]):
+        candles = self.candles[-300:]
+        for i, c in enumerate(candles):
             data.append((i, c["open"], c["high"], c["low"], c["close"]))
         self.candle_item.setData(data)
 
@@ -184,6 +192,13 @@ class _ExecutionChart(QtWidgets.QWidget):
             y = mousePoint.y()
             self.vLine.setPos(x)
             self.hLine.setPos(y)
+            # show price/time crosshair info
+            idx = int(round(x))
+            if 0 <= idx < len(self.candles):
+                c = self.candles[idx - (len(self.candles) - len(self.candles[-300:]))] if len(self.candles) > 300 else self.candles[idx]
+                self.crosshair_info.setText(
+                    f"t={idx} O={c['open']:.2f} H={c['high']:.2f} L={c['low']:.2f} C={c['close']:.2f} | y={y:.2f}"
+                )
 
 
 class InstitutionalMainWindow(QtWidgets.QMainWindow):

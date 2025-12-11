@@ -26,6 +26,7 @@ class OKXProvider(ProviderBase):
         self._failures = 0
         self._backoff = 1.0
         self._last_msg = timelib.time()
+        self._running = False
 
     def start(self) -> None:
         try:

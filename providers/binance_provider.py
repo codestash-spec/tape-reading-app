@@ -6,6 +6,7 @@ import threading
 import asyncio
 import json
 import logging
+import websockets
 from datetime import datetime, timezone
 from typing import Any
 
@@ -27,6 +28,7 @@ class BinanceProvider(ProviderBase):
         self._best_ask = None
         self._last_msg = time.time()
         self._backoff = 1.0
+        self._running = False
 
     def start(self) -> None:
         try:
@@ -87,10 +89,10 @@ class BinanceProvider(ProviderBase):
         asyncio.set_event_loop(self._loop)
         self._running = True
         stream = self.symbol.lower()
-        depth_url = f"wss://fstream.binance.com/ws/{stream}@depth20@100ms"
-        trade_url = f"wss://fstream.binance.com/ws/{stream}@trade"
-        ticker_url = f"wss://fstream.binance.com/ws/{stream}@ticker"
-        book_url = f"wss://fstream.binance.com/ws/{stream}@bookTicker"
+        depth_url = f"wss://stream.binance.com/ws/{stream}@depth20@100ms"
+        trade_url = f"wss://stream.binance.com/ws/{stream}@aggTrade"
+        ticker_url = f"wss://stream.binance.com/ws/{stream}@ticker"
+        book_url = f"wss://stream.binance.com/ws/{stream}@bookTicker"
         self._ws_tasks = [
             self._loop.create_task(self._ws_consume(depth_url, self._handle_depth)),
             self._loop.create_task(self._ws_consume(trade_url, self._handle_trade)),
@@ -113,8 +115,8 @@ class BinanceProvider(ProviderBase):
                 return
 
     def _handle_depth(self, data: dict) -> None:
-        bids = data.get("b", [])
-        asks = data.get("a", [])
+        bids = data.get("bids") or data.get("b", [])
+        asks = data.get("asks") or data.get("a", [])
         dom = []
         for p, s, *_ in bids:
             dom.append({"price": float(p), "bid_size": float(s), "ask_size": 0.0})
@@ -125,9 +127,9 @@ class BinanceProvider(ProviderBase):
         self.bus.publish(evt)
 
     def _handle_trade(self, data: dict) -> None:
-        price = float(data.get("p", 0))
-        size = float(data.get("q", 0))
-        side = "sell" if data.get("m", True) else "buy"
+        price = float(data.get("p", data.get("price", 0)))
+        size = float(data.get("q", data.get("size", 0)))
+        side = "sell" if data.get("m", True) else "buy"  # aggTrade: m true means buyer is maker
         evt = self.normalize_trade({"price": price, "size": size, "side": side})
         self.bus.publish(evt)
 

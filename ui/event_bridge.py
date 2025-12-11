@@ -74,24 +74,47 @@ class EventBridge(QtCore.QObject):
             pass
         return obj
 
+    def _normalize_dom(self, payload: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
+        ladder: Dict[str, Dict[str, float]] = {}
+        raw = payload.get("ladder") or payload.get("levels") or []
+        if "bids" in payload or "asks" in payload:
+            for side_key, is_bid in (("bids", True), ("asks", False)):
+                for level in payload.get(side_key, []):
+                    price = level.get("price")
+                    size = level.get("size")
+                    if price is None or size is None:
+                        continue
+                    entry = ladder.setdefault(str(price), {"bid": 0.0, "ask": 0.0})
+                    if is_bid:
+                        entry["bid"] = float(size)
+                    else:
+                        entry["ask"] = float(size)
+        elif isinstance(raw, dict):
+            for price, entry in raw.items():
+                if isinstance(entry, dict):
+                    ladder[str(price)] = {
+                        "bid": float(entry.get("bid", 0.0) or 0.0),
+                        "ask": float(entry.get("ask", 0.0) or 0.0),
+                    }
+        elif isinstance(raw, list):
+            for level in raw:
+                if isinstance(level, dict):
+                    price = level.get("price")
+                    if price is None:
+                        continue
+                    ladder[str(price)] = {
+                        "bid": float(level.get("bid", 0.0) or 0.0),
+                        "ask": float(level.get("ask", 0.0) or 0.0),
+                    }
+                elif isinstance(level, (list, tuple)) and len(level) >= 3:
+                    ladder[str(level[0])] = {"bid": float(level[1] or 0.0), "ask": float(level[2] or 0.0)}
+        return ladder
+
     def _on_event(self, evt: MarketEvent) -> None:
         et = evt.event_type
         payload = self._sanitize(evt.payload or {})
         if et == "dom_snapshot":
-            if "bids" in payload or "asks" in payload:
-                ladder: Dict[str, Dict[str, float]] = {}
-                for side_key, is_bid in (("bids", True), ("asks", False)):
-                    for level in payload.get(side_key, []):
-                        price = level.get("price")
-                        size = level.get("size")
-                        if price is None or size is None:
-                            continue
-                        entry = ladder.setdefault(str(price), {"bid": 0.0, "ask": 0.0, "liquidity": 0.0})
-                        if is_bid:
-                            entry["bid"] = size
-                        else:
-                            entry["ask"] = size
-                payload["ladder"] = ladder
+            payload["ladder"] = self._normalize_dom(payload)
             self.domUpdated.emit(payload)
         elif et == "dom_delta":
             self.domUpdated.emit(payload)

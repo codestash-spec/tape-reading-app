@@ -1,25 +1,92 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Deque, Dict
+from typing import Deque, Dict, Any
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from ui.event_bridge import EventBridge
-from ui.models import TapeTableModel
 from ui.themes import brand
+
+
+class TapeTableModel(QtCore.QAbstractTableModel):
+    HEADERS = ["Time", "Price", "Size", "Side", "Flags"]
+
+    def __init__(self, max_rows: int = 2000) -> None:
+        super().__init__()
+        self.rows: Deque[list] = deque(maxlen=max_rows)
+
+    def rowCount(self, parent=QtCore.QModelIndex()) -> int:  # type: ignore[override]
+        return len(self.rows)
+
+    def columnCount(self, parent=QtCore.QModelIndex()) -> int:  # type: ignore[override]
+        return len(self.HEADERS)
+
+    def headerData(self, section: int, orientation: QtCore.Qt.Orientation, role: int = QtCore.Qt.DisplayRole):  # type: ignore[override]
+        if role == QtCore.Qt.DisplayRole and orientation == QtCore.Qt.Horizontal:
+            return self.HEADERS[section]
+        return None
+
+    def data(self, index: QtCore.QModelIndex, role: int = QtCore.Qt.DisplayRole):  # type: ignore[override]
+        if not index.isValid():
+            return None
+        row = list(self.rows)[index.row()]
+        col = index.column()
+        if role == QtCore.Qt.DisplayRole:
+            return row[col]
+        if role == QtCore.Qt.UserRole:
+            return row
+        return None
+
+    def append(self, trade: Dict[str, Any]) -> None:
+        ts = trade.get("ts") or trade.get("time") or ""
+        try:
+            price = f"{float(trade.get('price', 0.0)):.3f}"
+        except Exception:
+            price = str(trade.get("price", ""))
+        try:
+            size = float(trade.get("size", 0.0))
+        except Exception:
+            size = 0.0
+        side = trade.get("side", trade.get("aggressor", "?"))
+        flags = trade.get("flags", "")
+        row = [ts, price, f"{size:.0f}", side, flags]
+        self.beginResetModel()
+        self.rows.appendleft(row)
+        self.endResetModel()
+
+
+class TapeDelegate(QtWidgets.QStyledItemDelegate):
+    def paint(self, painter: QtGui.QPainter, option: QtWidgets.QStyleOptionViewItem, index: QtCore.QModelIndex) -> None:  # type: ignore[override]
+        data = index.data(QtCore.Qt.UserRole)
+        if not data:
+            super().paint(painter, option, index)
+            return
+        _, _, size, side, _ = data
+        try:
+            size_f = float(size)
+        except Exception:
+            size_f = 0.0
+        side_color = QtGui.QColor("#36d399") if side == "buy" else QtGui.QColor("#ff5f56")
+        side_color.setAlphaF(0.2 + 0.6 * min(1.0, size_f / 50.0))
+        painter.save()
+        painter.fillRect(option.rect, side_color)
+        painter.setPen(QtGui.QPen(QtGui.QColor(brand.TEXT_LIGHT)))
+        painter.drawText(option.rect.adjusted(4, 0, -4, 0), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, str(index.data()))
+        painter.restore()
 
 
 class TapePanel(QtWidgets.QWidget):
     """
-    Time & Sales view with speed meter.
+    Advanced Time & Sales with color-coded side and size heat.
     """
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.model = TapeTableModel()
+        self.model = TapeTableModel(max_rows=2000)
         self.view = QtWidgets.QTableView()
         self.view.setModel(self.model)
+        self.view.setItemDelegate(TapeDelegate(self.view))
         self.view.verticalHeader().setVisible(False)
         self.view.horizontalHeader().setStretchLastSection(True)
         self.view.setAlternatingRowColors(True)
@@ -28,30 +95,44 @@ class TapePanel(QtWidgets.QWidget):
         self.speed_bar.setRange(0, 100)
         self.speed_bar.setFormat("Tape Speed %p%")
 
+        # filters
+        self.filter_size = QtWidgets.QDoubleSpinBox()
+        self.filter_size.setMaximum(1e9)
+        self.filter_size.setDecimals(0)
+        self.filter_size.setPrefix("Min size ")
+        self.filter_side = QtWidgets.QComboBox()
+        self.filter_side.addItems(["all", "buy", "sell"])
+
+        filter_layout = QtWidgets.QHBoxLayout()
+        filter_layout.addWidget(self.filter_size)
+        filter_layout.addWidget(self.filter_side)
+        filter_layout.addStretch()
+
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(filter_layout)
         layout.addWidget(self.speed_bar)
         layout.addWidget(self.view)
         self.setLayout(layout)
 
-        self._last_trades: Deque[float] = deque(maxlen=50)
+        self._recent_sizes: Deque[float] = deque(maxlen=50)
 
     def connect_bridge(self, bridge: EventBridge) -> None:
         bridge.tapeUpdated.connect(self.append_trade)
 
-    def append_trade(self, trade: Dict) -> None:
-        self.model.append_trade(trade)
+    def append_trade(self, trade: Dict[str, Any]) -> None:
+        side = trade.get("side") or trade.get("aggressor") or "?"
         try:
-            self._last_trades.append(float(trade.get("size", 0)))
+            size = float(trade.get("size", 0.0))
         except Exception:
-            self._last_trades.append(0.0)
-        # cap rows to avoid unbounded growth
-        max_rows = 1000
-        if len(self.model.rows) > max_rows:
-            self.model.beginRemoveRows(QtCore.QModelIndex(), max_rows, len(self.model.rows) - 1)
-            del self.model.rows[max_rows:]
-            self.model.endRemoveRows()
-        if self._last_trades:
-            avg_speed = sum(self._last_trades) / len(self._last_trades)
-            val = min(100, int(avg_speed))
-            self.speed_bar.setValue(val)
+            size = 0.0
+        # filters
+        if size < self.filter_size.value():
+            return
+        if self.filter_side.currentText() != "all" and side != self.filter_side.currentText():
+            return
+        self.model.append(trade)
+        self._recent_sizes.append(size)
+        if self._recent_sizes:
+            avg_speed = sum(self._recent_sizes) / len(self._recent_sizes)
+            self.speed_bar.setValue(min(100, int(avg_speed)))

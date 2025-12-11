@@ -1,12 +1,36 @@
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Any
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ui.event_bridge import EventBridge
-from ui.models import FootprintModel
 from ui.themes import brand
+
+
+class FootprintModel(QtCore.QObject):
+    changed = QtCore.Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        # price -> {"buy": x, "sell": y, "delta": x - y, "imbalance": percent}
+        self.matrix: Dict[float, Dict[str, float]] = {}
+
+    def update(self, fp: Dict[float, Dict[str, float]]) -> None:
+        clean = {}
+        for p, vols in fp.items():
+            try:
+                price = float(p)
+                buy = float(vols.get("buy", 0.0))
+                sell = float(vols.get("sell", 0.0))
+            except Exception:
+                continue
+            delta = buy - sell
+            tot = buy + sell
+            imbalance = (max(buy, sell) / tot) if tot else 0.0
+            clean[price] = {"buy": buy, "sell": sell, "delta": delta, "imbalance": imbalance}
+        self.matrix = clean
+        self.changed.emit()
 
 
 class _FootprintCanvas(QtWidgets.QWidget):
@@ -22,39 +46,51 @@ class _FootprintCanvas(QtWidgets.QWidget):
             fp = self.model.matrix
             if not fp:
                 return
-            prices = []
-            for p in fp.keys():
-                try:
-                    prices.append(float(p))
-                except Exception:
-                    continue
-            prices = sorted(prices, reverse=True)
+            prices = sorted(fp.keys(), reverse=True)
             if not prices:
                 return
-            max_vol = max((max(v.get("buy", 0.0), v.get("sell", 0.0)) for v in fp.values()), default=1.0)
-            cell_h = max(14, int(self.height() / len(prices)))
-            cell_w = self.width() // 2
+            max_vol = max((max(v["buy"], v["sell"]) for v in fp.values()), default=1.0)
+            cell_h = max(12, int(self.height() / len(prices)))
+            cell_w = self.width() // 3
             y = 0
             for price in prices:
-                vols = fp.get(price, {})
-                buy = float(vols.get("buy", 0.0)) if isinstance(vols, dict) else 0.0
-                sell = float(vols.get("sell", 0.0)) if isinstance(vols, dict) else 0.0
-                buy_intensity = min(1.0, buy / max_vol) if max_vol else 0.0
-                sell_intensity = min(1.0, sell / max_vol) if max_vol else 0.0
+                vols = fp[price]
+                buy = vols["buy"]
+                sell = vols["sell"]
+                delta = vols["delta"]
+                imb = vols["imbalance"]
 
+                buy_int = min(1.0, buy / max_vol)
+                sell_int = min(1.0, sell / max_vol)
+                delta_color = QtGui.QColor("#12d8fa") if delta >= 0 else QtGui.QColor("#ff5f56")
+                delta_color.setAlphaF(0.1 + 0.8 * min(1.0, abs(delta) / max_vol))
+
+                # buy cell
                 buy_rect = QtCore.QRect(0, y, cell_w, cell_h - 1)
-                sell_rect = QtCore.QRect(cell_w, y, cell_w, cell_h - 1)
                 buy_color = QtGui.QColor(18, 216, 250)
-                buy_color.setAlphaF(0.1 + 0.8 * buy_intensity)
-                sell_color = QtGui.QColor(255, 95, 86)
-                sell_color.setAlphaF(0.1 + 0.8 * sell_intensity)
-
+                buy_color.setAlphaF(0.1 + 0.8 * buy_int)
                 painter.fillRect(buy_rect, buy_color)
-                painter.fillRect(sell_rect, sell_color)
-
                 painter.setPen(QtGui.QPen(QtGui.QColor(brand.TEXT_LIGHT)))
                 painter.drawText(buy_rect.adjusted(4, 0, -4, 0), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, f"{buy:.0f}")
+
+                # sell cell
+                sell_rect = QtCore.QRect(cell_w, y, cell_w, cell_h - 1)
+                sell_color = QtGui.QColor(255, 95, 86)
+                sell_color.setAlphaF(0.1 + 0.8 * sell_int)
+                painter.fillRect(sell_rect, sell_color)
                 painter.drawText(sell_rect.adjusted(4, 0, -4, 0), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, f"{sell:.0f}")
+
+                # delta/imbalance cell
+                delta_rect = QtCore.QRect(cell_w * 2, y, cell_w, cell_h - 1)
+                painter.fillRect(delta_rect, delta_color)
+                painter.drawText(
+                    delta_rect.adjusted(4, 0, -4, 0),
+                    QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft,
+                    f"{delta:.0f} | {imb*100:.0f}%",
+                )
+
+                # price label overlay
+                painter.setPen(QtGui.QPen(QtGui.QColor("#b0b8c3")))
                 painter.drawText(QtCore.QRect(0, y, self.width(), cell_h), QtCore.Qt.AlignCenter, f"{price:.2f}")
 
                 y += cell_h
@@ -64,7 +100,7 @@ class _FootprintCanvas(QtWidgets.QWidget):
 
 class FootprintPanel(QtWidgets.QWidget):
     """
-    Heatmap footprint with imbalance highlight and tooltips.
+    Footprint with buy/sell, delta e imbalance por nível de preço.
     """
 
     def __init__(self, parent=None) -> None:
@@ -80,19 +116,10 @@ class FootprintPanel(QtWidgets.QWidget):
         bridge.footprintUpdated.connect(self.update_footprint)
         bridge.microstructureUpdated.connect(self.update_from_snapshot)
 
-    def update_footprint(self, footprint: Dict) -> None:
-        self.model.update_footprint(footprint)
+    def update_footprint(self, fp: Dict[str, Any]) -> None:
+        self.model.update(fp)
 
-    def update_from_snapshot(self, snapshot: Dict) -> None:
+    def update_from_snapshot(self, snapshot: Dict[str, Any]) -> None:
         fp = snapshot.get("footprint") or {}
         if fp:
-            clean = {}
-            for price, vols in fp.items():
-                try:
-                    price_f = float(price)
-                    buy = float(vols.get("buy", 0.0))
-                    sell = float(vols.get("sell", 0.0))
-                except Exception:
-                    continue
-                clean[price_f] = {"buy": buy, "sell": sell}
-            self.update_footprint(clean)
+            self.update_footprint(fp)

@@ -60,9 +60,23 @@ class EventBridge(QtCore.QObject):
             self._subscriptions.append(et)
         self._attach_logging()
 
+    def _sanitize(self, obj: Any) -> Any:
+        if isinstance(obj, dict):
+            return {str(k): self._sanitize(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [self._sanitize(v) for v in obj]
+        try:
+            import collections
+
+            if isinstance(obj, collections.defaultdict):
+                return {str(k): self._sanitize(v) for k, v in obj.items()}
+        except Exception:
+            pass
+        return obj
+
     def _on_event(self, evt: MarketEvent) -> None:
         et = evt.event_type
-        payload = evt.payload or {}
+        payload = self._sanitize(evt.payload or {})
         if et == "dom_snapshot":
             self.domUpdated.emit(payload)
         elif et == "dom_delta":

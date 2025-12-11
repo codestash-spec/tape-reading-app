@@ -184,6 +184,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
 
     def _build_toolbar(self) -> None:
         toolbar = QtWidgets.QToolBar("Main")
+        toolbar.setObjectName("Main")
         toolbar.setMovable(True)
         icon_path = "ui/themes/icons/"
 

@@ -31,3 +31,4 @@ ui:
   provider_debug: false
   execution_debug: false
   market_debug: false
+  audit_mode: false

@@ -26,6 +26,7 @@ class EventBus:
         self._lock = threading.RLock()
         self._running = threading.Event()
         self._running.set()
+        self.allowed_sources: set[str] | None = None
 
         self._worker = threading.Thread(target=self._dispatch_loop, daemon=True)
         self._worker.start()
@@ -69,6 +70,11 @@ class EventBus:
         if not self._running.is_set():
             logging.getLogger(__name__).warning("EventBus.publish called after stop(). Event dropped.")
             return
+        if self.allowed_sources is not None:
+            src = getattr(event, "source", None)
+            if src not in self.allowed_sources:
+                logging.getLogger(__name__).error("[Error][GhostEvent] Event received from provider that should be DEAD source=%s allowed=%s", src, self.allowed_sources)
+                return
         self._queue.put_nowait(event)
 
     # --------------------------------------------------------
@@ -119,3 +125,7 @@ class EventBus:
         self._running.clear()
         self._queue.put(None)
         self._worker.join(timeout=timeout)
+
+    def count_subscribers(self) -> int:
+        with self._lock:
+            return sum(len(v) for v in self._subscribers.values())

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import threading
 import logging
 import time
 from typing import Any, Dict
@@ -31,10 +32,13 @@ class ProviderManager:
         self.active_provider: ProviderBase | None = None
         self.log = logging.getLogger(__name__)
         self.capabilities: Dict[str, Any] = {}
+        self.audit_mode = bool(settings.get("ui", {}).get("audit_mode", False))
 
     def start(self, name: str) -> None:
         if name not in self.providers:
             raise ValueError(f"Unknown provider {name}")
+        threads_before = len(threading.enumerate())
+        callbacks_before = self.bus.count_subscribers()
         if self.active_provider:
             self.log.info("[ProviderManager] Stopping provider %s...", self.active_name)
             self.active_provider.stop()
@@ -47,12 +51,19 @@ class ProviderManager:
         self.active_provider = self.providers[name]
         self.active_provider.start()
         self.log.info("[ProviderManager] Provider %s started", name)
-        self.capabilities = {"depth_hint": self.settings.get("ui", {}).get("dom_depth", 20)}
+        self.capabilities = {"depth_hint": self.settings.get("ui", {}).get("dom_depth", 20), "instrument_type": None}
+        if self.audit_mode:
+            self.log.info("[Audit][ProviderStart] provider=%s", name)
+        self.bus.allowed_sources = {name}
+        self._assert_provider_dead(name, threads_before, callbacks_before)
 
     def stop(self) -> None:
         if self.active_provider:
             self.log.info("[ProviderManager] Stopping provider %s...", self.active_name)
             self.active_provider.stop()
+            if self.audit_mode:
+                self.log.info("[Audit][ProviderStop] provider=%s", self.active_name)
+        self.bus.allowed_sources = None
         self.active_provider = None
         self.active_name = None
         self.log.info("[ProviderManager] Provider stopped.")
@@ -73,3 +84,13 @@ class ProviderManager:
         self.start(info["market_provider"])
         self.capabilities = {"depth_hint": self.settings.get("ui", {}).get("dom_depth", 20), "instrument_type": info["instrument_type"]}
         return info
+
+    def _assert_provider_dead(self, name: str, threads_before: int, callbacks_before: int) -> None:
+        threads_after = len(threading.enumerate())
+        callbacks_after = self.bus.count_subscribers()
+        if self.audit_mode:
+            self.log.info("[Audit][ThreadsBefore] %s", threads_before)
+            self.log.info("[Audit][ThreadsAfter] %s", threads_after)
+            self.log.info("[Audit][ActiveCallbacks] %s", callbacks_after)
+        if threads_after > threads_before + 2 or callbacks_after > callbacks_before + 2:
+            self.log.warning("[Audit][LeakDetected] provider %s may still be alive", name)

@@ -34,6 +34,7 @@ class ProviderBase(ABC):
         for et, cb in list(self._subscriptions):
             self.bus.unsubscribe(et, cb)
         self._subscriptions.clear()
+        self._post_stop()
 
     @abstractmethod
     def subscribe_dom(self) -> None:
@@ -66,3 +67,9 @@ class ProviderBase(ABC):
         if self._thread:
             self._thread.join(timeout=1.0)
         self._thread = None
+
+    def _post_stop(self) -> None:
+        """
+        Hook for subclasses to implement extra cleanup.
+        """
+        return

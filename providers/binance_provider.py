@@ -25,6 +25,8 @@ class BinanceProvider(ProviderBase):
         self._failures = 0
         self._best_bid = None
         self._best_ask = None
+        self._last_msg = time.time()
+        self._backoff = 1.0
 
     def start(self) -> None:
         try:
@@ -66,6 +68,8 @@ class BinanceProvider(ProviderBase):
                             data = json.loads(msg)
                         except Exception:
                             continue
+                        self._last_msg = time.time()
+                        self._backoff = 1.0
                         handler(data)
             except Exception as exc:
                 self._failures += 1
@@ -74,7 +78,8 @@ class BinanceProvider(ProviderBase):
                     logging.getLogger(__name__).error("Binance WS failed 3 times; falling back to mock provider.")
                     self._start_thread(self._run_mock)
                     return
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(min(10.0, self._backoff))
+                self._backoff = min(10.0, self._backoff * 2)
 
     def _run_ws(self) -> None:
         if not self._loop:
@@ -91,8 +96,21 @@ class BinanceProvider(ProviderBase):
             self._loop.create_task(self._ws_consume(trade_url, self._handle_trade)),
             self._loop.create_task(self._ws_consume(ticker_url, self._handle_ticker)),
             self._loop.create_task(self._ws_consume(book_url, self._handle_book)),
+            self._loop.create_task(self._heartbeat_watch()),
         ]
         self._loop.run_forever()
+
+    async def _heartbeat_watch(self) -> None:
+        while self._running:
+            await asyncio.sleep(5.0)
+            if time.time() - self._last_msg > 10.0:
+                logging.getLogger(__name__).warning("Binance WS stale; reconnecting")
+                self._failures += 1
+                self._backoff = min(10.0, self._backoff * 2)
+                self._running = False
+                # stop loop to force reconnect
+                self._loop.call_soon_threadsafe(self._loop.stop)
+                return
 
     def _handle_depth(self, data: dict) -> None:
         bids = data.get("b", [])

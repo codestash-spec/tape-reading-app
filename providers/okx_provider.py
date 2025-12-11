@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import threading
+import time as timelib
 from datetime import datetime, timezone
 from typing import Any
 
@@ -22,6 +23,9 @@ class OKXProvider(ProviderBase):
         super().__init__(event_bus, settings, symbol)
         self._loop: asyncio.AbstractEventLoop | None = None
         self._ws_tasks = []
+        self._failures = 0
+        self._backoff = 1.0
+        self._last_msg = timelib.time()
 
     def start(self) -> None:
         try:
@@ -64,6 +68,8 @@ class OKXProvider(ProviderBase):
                             data = json.loads(raw)
                         except Exception:
                             continue
+                        self._last_msg = timelib.time()
+                        self._backoff = 1.0
                         arg = data.get("arg", {})
                         channel = arg.get("channel")
                         if channel == "books5" or channel == "books50-l2-tbt":
@@ -71,8 +77,14 @@ class OKXProvider(ProviderBase):
                         elif channel == "trades":
                             self._handle_trade(data)
             except Exception as exc:
-                logging.getLogger(__name__).warning("OKX WS reconnecting after error: %s", exc)
-                await asyncio.sleep(1.0)
+                self._failures += 1
+                logging.getLogger(__name__).warning("OKX WS reconnecting after error: %s (fail=%s)", exc, self._failures)
+                if self._failures >= 3:
+                    logging.getLogger(__name__).error("OKX WS failed 3 times; falling back to mock feed")
+                    self._start_thread(self._run_mock)
+                    return
+                await asyncio.sleep(min(10.0, self._backoff))
+                self._backoff = min(10.0, self._backoff * 2)
 
     def _run_ws(self) -> None:
         if not self._loop:
@@ -86,8 +98,20 @@ class OKXProvider(ProviderBase):
         self._ws_tasks = [
             self._loop.create_task(self._ws_consume(depth_url, depth_msg)),
             self._loop.create_task(self._ws_consume(depth_url, trade_msg)),
+            self._loop.create_task(self._heartbeat_watch()),
         ]
         self._loop.run_forever()
+
+    async def _heartbeat_watch(self) -> None:
+        while self._running:
+            await asyncio.sleep(5.0)
+            if timelib.time() - self._last_msg > 10.0:
+                logging.getLogger(__name__).warning("OKX WS stale; reconnecting")
+                self._failures += 1
+                self._backoff = min(10.0, self._backoff * 2)
+                self._running = False
+                self._loop.call_soon_threadsafe(self._loop.stop)
+                return
 
     def _handle_depth(self, data: dict) -> None:
         books = data.get("data", [])

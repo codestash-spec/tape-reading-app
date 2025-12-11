@@ -285,6 +285,12 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         about_action = help_menu.addAction("About")
         about_action.triggered.connect(self._show_about)
 
+        presets_menu = menubar.addMenu("Layout Presets")
+        presets_menu.addAction("Preset 1 - Scalping XAUUSD").triggered.connect(lambda: self._apply_preset("scalping"))
+        presets_menu.addAction("Preset 2 - Institutional BTC").triggered.connect(lambda: self._apply_preset("btc"))
+        presets_menu.addAction("Preset 3 - Futures CME").triggered.connect(lambda: self._apply_preset("cme"))
+        presets_menu.addAction("Preset 4 - Custom (save current)").triggered.connect(lambda: self.workspace.save_profile("custom"))
+
     def _build_toolbar(self) -> None:
         toolbar = QtWidgets.QToolBar("Main")
         toolbar.setObjectName("Main")
@@ -389,6 +395,27 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self.save_state()
         super().closeEvent(event)
+
+    def _apply_preset(self, name: str) -> None:
+        """Simple dock arrangement presets."""
+        area = self.area
+        try:
+            if name == "scalping":
+                area.moveDock(area.docks["DOM"], "left", area.docks["Chart"])
+                area.moveDock(area.docks["Footprint"], "right", area.docks["DOM"])
+                area.moveDock(area.docks["Tape"], "right", area.docks["Footprint"])
+            elif name == "btc":
+                area.moveDock(area.docks["Chart"], "above", area.docks["DOM"])
+                area.moveDock(area.docks["Liquidity"], "right", area.docks["Chart"])
+                area.moveDock(area.docks["Footprint"], "bottom", area.docks["Chart"])
+            elif name == "cme":
+                area.moveDock(area.docks["Heatmap"], "above", area.docks.get("Footprint", area.docks["Chart"]))
+                area.moveDock(area.docks["VolumeProfile"], "right", area.docks["Heatmap"])
+                area.moveDock(area.docks["Strategy"], "right", area.docks["VolumeProfile"])
+            else:
+                self.workspace.save_profile("custom")
+        except Exception:
+            pass
 
     def save_state(self) -> None:
         self.settings.beginGroup(self._profile_key)

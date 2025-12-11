@@ -133,6 +133,8 @@ class EventBridge(QtCore.QObject):
                 self.deltaUpdated.emit(features)
         elif et == "signal":
             self.signalGenerated.emit(payload)
+        elif et == "strategy_signal":
+            self.signalGenerated.emit(payload)
         elif et == "order_event":
             self.orderStatusUpdated.emit(payload)
         elif et == "risk_decision":

@@ -28,6 +28,7 @@ from risk.engine import RiskEngine
 from execution.adapters.sim import SimAdapter
 from execution.router import ExecutionRouter
 from strategy.orchestrator import StrategyOrchestrator
+from strategy.simple_strategy import SimpleStrategyEngine
 from providers.provider_manager import ProviderManager
 from ui.event_bridge import EventBridge
 from ui.main_window import InstitutionalMainWindow
@@ -77,6 +78,8 @@ def main(argv: List[str] | None = None) -> int:
     }
     provider_manager = ProviderManager(bus, pm_settings)
     autodetect = provider_manager.auto_start(settings.market_symbol or "BTCUSDT")
+    log.info("[AutoStart] Market symbol: %s", settings.market_symbol or "BTCUSDT")
+    log.info("[Provider] %s WS requested", autodetect.get("market_provider", "unknown"))
 
     # Engines and strategy
     micro = MicrostructureEngine(bus, symbols)
@@ -90,13 +93,16 @@ def main(argv: List[str] | None = None) -> int:
     spoof_detector = SpoofingDetector(bus)
     iceberg_detector = IcebergDetector(bus)
     large_trade_detector = LargeTradeDetector(bus)
+    simple_strategy = SimpleStrategyEngine(bus)
 
     strategist = StrategyOrchestrator(bus, symbols)
     strategist.start()
+    log.info("[Strategy] Engine ready")
 
     risk_engine = RiskEngine(settings.risk_limits)
     adapter = SimAdapter(bus)
     router = ExecutionRouter(bus, adapter)
+    log.info("[Execution] SIM execution ready")
 
     def on_signal(evt: MarketEvent) -> None:
         order = build_order_from_signal(evt, default_qty=settings.execution.get("default_qty", 1.0))
@@ -114,6 +120,7 @@ def main(argv: List[str] | None = None) -> int:
             router.submit(order)
 
     bus.subscribe("signal", on_signal)
+    bus.subscribe("strategy_signal", on_signal)
 
     # Qt Application
     app = QtWidgets.QApplication(sys.argv)
@@ -136,10 +143,13 @@ def main(argv: List[str] | None = None) -> int:
     )
     # attach FPS monitor label to status bar if available
     helpers.FPS_MONITOR = window.status_widget if hasattr(window, "status_widget") else None
-    window.market_watch.apply_on_start(settings.market_symbol or "BTCUSDT")
+    window.market_watch.apply_default_symbol_on_start(settings.market_symbol or "BTCUSDT")
+    log.info("[MarketWatch] Applied default symbol %s", settings.market_symbol or "BTCUSDT")
     window.resize(1400, 900)
     window.show()
     splash.finish(window)
+    log.info("[UI] All core panels online")
+    log.info("[Chart] Renderer active (line/candles)")
 
     ret = app.exec()
 

@@ -103,6 +103,7 @@ class _FootprintCanvas(QtWidgets.QWidget):
                 y += cell_h
         finally:
             painter.end()
+        helpers.fps_tick()
 
 
 class FootprintPanel(QtWidgets.QWidget):

@@ -246,3 +246,4 @@ class DomPanel(QtWidgets.QWidget):
         painter.end()
         self._trail = scrolled
         self.heatmap.setPixmap(self._trail)
+        helpers.fps_tick()

@@ -24,7 +24,7 @@ class DeltaEngine:
         payload = evt.payload
         price = float(payload.get("price", 0.0))
         size = float(payload.get("size", 0.0))
-        aggressor = payload.get("aggressor", "unknown")
+        aggressor = payload.get("aggressor", payload.get("side", "unknown"))
 
         st.delta_bar.volume += size
         if aggressor == "buy":
@@ -32,6 +32,16 @@ class DeltaEngine:
         elif aggressor == "sell":
             st.delta_bar.sells += size
         st.last_price = price
+        # emit delta_update
+        delta_val = st.delta_bar.buys - st.delta_bar.sells
+        evt_out = MarketEvent(
+            event_type="delta_update",
+            timestamp=datetime.now(timezone.utc),
+            source="delta_engine",
+            symbol=sym,
+            payload={"delta": delta_val, "buys": st.delta_bar.buys, "sells": st.delta_bar.sells, "price": price},
+        )
+        self.bus.publish(evt_out)
 
     def emit_delta(self, symbol: str) -> MarketEvent:
         st = self.state.setdefault(symbol, SymbolState())

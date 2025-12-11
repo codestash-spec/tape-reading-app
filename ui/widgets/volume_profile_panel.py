@@ -66,3 +66,4 @@ class VolumeProfilePanel(QtWidgets.QWidget):
                 y -= bar_h
         finally:
             painter.end()
+        helpers.fps_tick()

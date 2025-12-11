@@ -88,6 +88,7 @@ class BinanceProvider(ProviderBase):
             return
         asyncio.set_event_loop(self._loop)
         self._running = True
+        logging.getLogger(__name__).info("[Provider] Binance WS connecting for %s", self.symbol)
         stream = self.symbol.lower()
         depth_url = f"wss://stream.binance.com/ws/{stream}@depth20@100ms"
         trade_url = f"wss://stream.binance.com/ws/{stream}@aggTrade"

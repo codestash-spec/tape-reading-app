@@ -57,6 +57,7 @@ class MarketWatchPanel(QtWidgets.QWidget):
 
         self._populate(self.watchlists.get("default", []))
         self._initial_applied = False
+        self.default_symbol = None
 
     def _load_watchlists(self) -> Dict[str, List[str]]:
         if not os.path.exists(self.watchlist_path):
@@ -106,9 +107,11 @@ class MarketWatchPanel(QtWidgets.QWidget):
         if symbol in self.favorites:
             self.favorites.remove(symbol)
             btn.setText("☆")
+            btn.setStyleSheet("")
         else:
             self.favorites.add(symbol)
             btn.setText("★")
+            btn.setStyleSheet("color: #ffd700;")
 
     def _add_instrument(self) -> None:
         text, ok = QtWidgets.QInputDialog.getText(self, "Add Instrument", "Symbol:")
@@ -155,11 +158,13 @@ class MarketWatchPanel(QtWidgets.QWidget):
                 except Exception:
                     prev_val = price
                 last_item.setText(f"{price:.2f}")
+                last_item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
                 delta = price - prev_val
                 chg = ((price - prev_val) / prev_val * 100) if prev_val else 0.0
                 self.table.item(row, 2).setText(f"{delta:+.2f}")
                 chg_item = self.table.item(row, 3)
                 chg_item.setText(f"{chg:+.2f}%")
+                chg_item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
                 if chg > 0:
                     chg_item.setForeground(QtCore.Qt.green)
                 elif chg < 0:
@@ -220,3 +225,7 @@ class MarketWatchPanel(QtWidgets.QWidget):
                 self.instrumentSelected.emit(symbol)
                 self._initial_applied = True
                 break
+
+    def apply_default_symbol_on_start(self, default_symbol: str) -> None:
+        self.default_symbol = default_symbol.upper()
+        self.apply_on_start(self.default_symbol)

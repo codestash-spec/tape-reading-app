@@ -39,7 +39,7 @@ class SimAdapter:
                 status=OrderStatus.FILL,
                 timestamp=datetime.now(timezone.utc),
                 filled_qty=order.quantity,
-                avg_price=order.limit_price or 0.0,
+                avg_price=order.limit_price or order.stop_price or 0.0,
             )
             self._publish(fill)
 

@@ -27,6 +27,7 @@ from ui.widgets.heatmap_panel import HeatmapPanel
 from ui.widgets.alerts_panel import AlertsPanel
 from ui.widgets.regime_panel import RegimePanel
 from ui.widgets.volatility_panel import VolatilityPanel
+from ui.widgets.provider_debug_panel import ProviderDebugPanel
 from ui.widgets.market_watch_panel import MarketWatchPanel
 from ui.workspace_manager import WorkspaceManager
 from ui.settings_window import SettingsWindow
@@ -289,6 +290,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.market_watch = MarketWatchPanel()
         self.market_watch.instrumentSelected.connect(self._switch_instrument)
         self.status_widget = StatusBarWidget()
+        self.provider_debug = ProviderDebugPanel()
 
         # Wire bridge
         self.dom_panel.connect_bridge(bridge)
@@ -303,6 +305,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.vol_profile_panel.connect_bridge(bridge)
         self.regime_panel.connect_bridge(bridge)
         self.vol_panel.connect_bridge(bridge)
+        self.provider_debug.connect_bridge(bridge)
         self.market_watch.connect_bridge(bridge)
         self.status_widget.connect_bridge(bridge, mode=mode)
 
@@ -321,6 +324,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.area.addDock(Dock("Regime", widget=self.regime_panel), "above", self.area.docks["VolumeProfile"])
         self.area.addDock(Dock("Volatility", widget=self.vol_panel), "above", self.area.docks["Regime"])
         self.area.addDock(Dock("MarketWatch", widget=self.market_watch), "left", self.area.docks["DOM"])
+        self.area.addDock(Dock("ProviderDebug", widget=self.provider_debug), "bottom", self.area.docks["Logs"])
 
         self.statusBar().addPermanentWidget(self.status_widget)
 
@@ -411,9 +415,13 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         QtGui.QShortcut(QtGui.QKeySequence("Ctrl+1"), self, activated=lambda: self._cycle_watch(-1))
         QtGui.QShortcut(QtGui.QKeySequence("Ctrl+2"), self, activated=lambda: self._cycle_watch(1))
         # status FPS monitor placeholder
-        if hasattr(self, "status_widget"):
-            self.status_widget.fps_label = QtWidgets.QLabel("FPS: --")
-            self.statusBar().addPermanentWidget(self.status_widget.fps_label)
+        from ui.perf_monitor import FPSMonitor
+
+        self.fps_monitor = FPSMonitor(self.statusBar())
+        self.statusBar().addPermanentWidget(self.fps_monitor)
+        import ui.helpers as helpers
+
+        helpers.FPS_MONITOR = self.fps_monitor
 
     def _on_mode_change(self, mode: str) -> None:
         self.status_widget.mode_label.setText(f"Mode: {mode}")

@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List
 
-from PySide6 import QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from core.config import load_settings
 from core.event_bus import EventBus

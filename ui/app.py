@@ -31,6 +31,7 @@ from strategy.orchestrator import StrategyOrchestrator
 from providers.provider_manager import ProviderManager
 from ui.event_bridge import EventBridge
 from ui.main_window import InstitutionalMainWindow
+from ui import helpers
 
 
 def build_order_from_signal(signal_evt: MarketEvent, default_qty: float = 1.0) -> OrderRequest:
@@ -133,6 +134,8 @@ def main(argv: List[str] | None = None) -> int:
         event_bus=bus,
         pm_settings=pm_settings,
     )
+    # attach FPS monitor label to status bar if available
+    helpers.FPS_MONITOR = window.status_widget if hasattr(window, "status_widget") else None
     window.market_watch.apply_on_start(settings.market_symbol or "BTCUSDT")
     window.resize(1400, 900)
     window.show()

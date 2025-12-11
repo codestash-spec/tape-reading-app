@@ -410,6 +410,10 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         # hotkeys
         QtGui.QShortcut(QtGui.QKeySequence("Ctrl+1"), self, activated=lambda: self._cycle_watch(-1))
         QtGui.QShortcut(QtGui.QKeySequence("Ctrl+2"), self, activated=lambda: self._cycle_watch(1))
+        # status FPS monitor placeholder
+        if hasattr(self, "status_widget"):
+            self.status_widget.fps_label = QtWidgets.QLabel("FPS: --")
+            self.statusBar().addPermanentWidget(self.status_widget.fps_label)
 
     def _on_mode_change(self, mode: str) -> None:
         self.status_widget.mode_label.setText(f"Mode: {mode}")

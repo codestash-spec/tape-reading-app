@@ -116,11 +116,16 @@ class TapePanel(QtWidgets.QWidget):
         self.setLayout(layout)
 
         self._recent_sizes: Deque[float] = deque(maxlen=50)
+        self._pending: list[Dict[str, Any]] = []
+        self._throttle = QtCore.QTimer(self)
+        self._throttle.setInterval(int(1000 / 60))
+        self._throttle.timeout.connect(self._flush)
+        self._throttle.start()
 
     def connect_bridge(self, bridge: EventBridge) -> None:
-        bridge.tapeUpdated.connect(self.append_trade)
+        bridge.tapeUpdated.connect(self.queue_trade)
 
-    def append_trade(self, trade: Dict[str, Any]) -> None:
+    def queue_trade(self, trade: Dict[str, Any]) -> None:
         side = trade.get("side") or trade.get("aggressor") or "?"
         try:
             size = float(trade.get("size", 0.0))
@@ -131,8 +136,32 @@ class TapePanel(QtWidgets.QWidget):
             return
         if self.filter_side.currentText() != "all" and side != self.filter_side.currentText():
             return
-        self.model.append(trade)
-        self._recent_sizes.append(size)
+        trade["_size_float"] = size
+        self._pending.append(trade)
+
+    def _flush(self) -> None:
+        from ui.widgets.dom_panel import UI_UPDATE_PAUSED
+
+        if UI_UPDATE_PAUSED or not self._pending:
+            return
+        batch = self._pending[:]
+        self._pending.clear()
+        if not batch:
+            return
+        self.model.beginResetModel()
+        for trade in batch:
+            size = trade.get("_size_float", 0.0)
+            self.model.rows.appendleft(
+                [
+                    trade.get("ts") or trade.get("time") or "",
+                    f"{float(trade.get('price', 0.0)):.3f}" if isinstance(trade.get("price", None), (int, float)) else trade.get("price", ""),
+                    f"{size:.0f}",
+                    trade.get("side", trade.get("aggressor", "?")),
+                    trade.get("flags", ""),
+                ]
+            )
+            self._recent_sizes.append(size)
+        self.model.endResetModel()
         if self._recent_sizes:
             avg_speed = sum(self._recent_sizes) / len(self._recent_sizes)
             self.speed_bar.setValue(min(100, int(avg_speed)))

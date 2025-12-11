@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List
 
-from PySide6 import QtWidgets
+from PySide6 import QtGui, QtWidgets
 
 from core.config import load_settings
 from core.event_bus import EventBus
@@ -145,12 +145,23 @@ def main(argv: List[str] | None = None) -> int:
 
     # Qt Application
     app = QtWidgets.QApplication(sys.argv)
+    splash = QtWidgets.QSplashScreen(QtGui.QPixmap(400, 300))
+    splash.showMessage("Loading Institutional UI...", QtCore.Qt.AlignCenter)  # type: ignore
+    splash.show()
+    app.processEvents()
     bridge = EventBridge(bus)
     bridge.start()
 
-    window = InstitutionalMainWindow(bridge, theme_mode=settings.ui.get("theme", "dark"), mode=mode)
+    window = InstitutionalMainWindow(
+        bridge,
+        theme_mode=settings.ui.get("theme", "dark"),
+        mode=mode,
+        on_submit_order=router.submit,
+        on_cancel_order=router.cancel,
+    )
     window.resize(1400, 900)
     window.show()
+    splash.finish(window)
 
     ret = app.exec()
 

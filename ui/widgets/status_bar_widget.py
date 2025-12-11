@@ -17,11 +17,15 @@ class StatusBarWidget(QtWidgets.QWidget):
         self.conn_label = QtWidgets.QLabel("Conn: ?")
         self.risk_label = QtWidgets.QLabel("Risk: ?")
         self.mode_label = QtWidgets.QLabel("Mode: ?")
+        self.lat_label = QtWidgets.QLabel("Latency: —")
+        self.fps_label = QtWidgets.QLabel("FPS: —")
 
         layout = QtWidgets.QHBoxLayout()
         layout.addWidget(self.conn_label)
         layout.addWidget(self.risk_label)
         layout.addWidget(self.mode_label)
+        layout.addWidget(self.lat_label)
+        layout.addWidget(self.fps_label)
         layout.addStretch()
         self.setLayout(layout)
 
@@ -37,4 +41,3 @@ class StatusBarWidget(QtWidgets.QWidget):
     def _on_risk(self, evt: Dict) -> None:
         status = "OK" if evt.get("approved", True) else "HALT"
         self.risk_label.setText(f"Risk: {status}")
-

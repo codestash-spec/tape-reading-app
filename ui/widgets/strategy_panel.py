@@ -10,7 +10,7 @@ from ui.models import StrategySignalsModel
 
 class StrategyPanel(QtWidgets.QWidget):
     """
-    Displays active signals and playbook state.
+    Displays active signals, playbooks and opportunity meter.
     """
 
     def __init__(self, parent=None) -> None:
@@ -21,7 +21,13 @@ class StrategyPanel(QtWidgets.QWidget):
         self.view.verticalHeader().setVisible(False)
         self.view.horizontalHeader().setStretchLastSection(True)
 
+        self.opportunity = QtWidgets.QProgressBar()
+        self.opportunity.setRange(0, 100)
+        self.opportunity.setFormat("Opportunity %p%")
+
         layout = QtWidgets.QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.opportunity)
         layout.addWidget(self.view)
         self.setLayout(layout)
 
@@ -30,4 +36,5 @@ class StrategyPanel(QtWidgets.QWidget):
 
     def append_signal(self, sig: Dict) -> None:
         self.model.append_signal(sig)
-
+        score = float(sig.get("score", 0.0))
+        self.opportunity.setValue(min(100, int(abs(score) * 100)))

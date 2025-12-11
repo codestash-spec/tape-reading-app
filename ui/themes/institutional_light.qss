@@ -1,0 +1,85 @@
+/* Institutional light theme */
+QMainWindow {
+    background: #f5f7fb;
+}
+QMenuBar, QMenu {
+    background-color: #ffffff;
+    color: #1f2430;
+    selection-background-color: #e5f0ff;
+    selection-color: #0b3a59;
+}
+QStatusBar {
+    background: #e9edf5;
+}
+QDockWidget {
+    font: 9pt "Segoe UI";
+    color: #1f2430;
+    background: #ffffff;
+    border: 1px solid #d7dce5;
+    border-radius: 6px;
+}
+QDockWidget::title {
+    background: #eef2f7;
+    padding: 4px;
+    border-radius: 6px 6px 0 0;
+}
+QTableView {
+    background: #ffffff;
+    alternate-background-color: #f2f6fb;
+    color: #1f2430;
+    gridline-color: #d7dce5;
+    selection-background-color: #d2e5ff;
+    selection-color: #0b3a59;
+    border: 1px solid #d7dce5;
+    border-radius: 6px;
+}
+QHeaderView::section {
+    background: #eef2f7;
+    color: #1f2430;
+    padding: 4px;
+    border: 1px solid #d7dce5;
+}
+QPushButton {
+    background: #0f4c75;
+    color: #ffffff;
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+QPushButton:hover { background: #0b3a59; }
+QPushButton:pressed { background: #082a42; }
+QLineEdit, QComboBox, QTextEdit {
+    background: #ffffff;
+    color: #1f2430;
+    border: 1px solid #d7dce5;
+    border-radius: 6px;
+    padding: 4px;
+}
+QToolBar {
+    background: #eef2f7;
+    border: 0;
+    spacing: 6px;
+}
+QToolButton {
+    background: transparent;
+    color: #1f2430;
+    padding: 6px;
+}
+QToolButton:hover {
+    background: #dfe6f2;
+    border-radius: 6px;
+}
+QScrollBar:vertical, QScrollBar:horizontal {
+    background: #f2f6fb;
+    width: 10px;
+    margin: 0px;
+}
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+    background: #cbd4e2;
+    border-radius: 5px;
+}
+QToolTip {
+    background: #ffffff;
+    color: #1f2430;
+    border: 1px solid #d7dce5;
+    border-radius: 4px;
+}

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Callable, Optional
 
-from PySide6 import QtCore, QtWidgets
+import pyqtgraph as pg
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from ui.event_bridge import EventBridge
 from ui.themes import Theme
+from ui.themes import brand
 from ui.widgets.dom_panel import DomPanel
 from ui.widgets.delta_panel import DeltaPanel
 from ui.widgets.footprint_panel import FootprintPanel
@@ -16,6 +18,53 @@ from ui.widgets.execution_panel import ExecutionPanel
 from ui.widgets.metrics_panel import MetricsPanel
 from ui.widgets.logs_panel import LogsPanel
 from ui.widgets.status_bar_widget import StatusBarWidget
+from ui.widgets.order_ticket import OrderTicket
+from ui.workspace_manager import WorkspaceManager
+from ui.settings_window import SettingsWindow
+
+
+class _ExecutionChart(QtWidgets.QWidget):
+    def __init__(self, bridge: EventBridge, parent=None) -> None:
+        super().__init__(parent)
+        self.bridge = bridge
+        self.plot = pg.PlotWidget(background=brand.BG_DARK)
+        self.plot.showGrid(x=True, y=True, alpha=0.25)
+        self.price_curve = self.plot.plot(pen=pg.mkPen(brand.ACCENT, width=2))
+        self.fill_scatter = pg.ScatterPlotItem(symbol="o", size=8, brush=pg.mkBrush(brand.SUCCESS))
+        self.plot.addItem(self.fill_scatter)
+        self.ts: list[float] = []
+        self.prices: list[float] = []
+        self.fills: list[dict] = []
+
+        layout = QtWidgets.QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.plot)
+        self.setLayout(layout)
+
+        bridge.microstructureUpdated.connect(self.on_snapshot)
+        bridge.orderStatusUpdated.connect(self.on_order)
+
+    def on_snapshot(self, snap: dict) -> None:
+        mid = snap.get("mid") or snap.get("price")
+        if mid is None:
+            return
+        self.ts.append(len(self.ts))
+        self.prices.append(float(mid))
+        self.price_curve.setData(self.ts, self.prices)
+
+    def on_order(self, evt: dict) -> None:
+        if evt.get("status") not in ("fill", "partial_fill", "FILL", "PARTIAL"):
+            return
+        price = evt.get("avg_price") or evt.get("limit_price") or 0.0
+        self.fills.append({"pos": (len(self.ts), price), "side": evt.get("side", "buy")})
+        spots = [
+            {
+                "pos": f["pos"],
+                "brush": pg.mkBrush(brand.SUCCESS if f["side"] == "buy" else brand.DANGER),
+            }
+            for f in self.fills
+        ]
+        self.fill_scatter.setData(spots)
 
 
 class InstitutionalMainWindow(QtWidgets.QMainWindow):
@@ -23,20 +72,32 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
     Dockable institutional UI inspired by Bloomberg/Refinitiv/Bookmap layouts.
     """
 
-    def __init__(self, bridge: EventBridge, theme_mode: str = "dark", mode: str = "sim", parent=None) -> None:
+    def __init__(
+        self,
+        bridge: EventBridge,
+        theme_mode: str = "dark",
+        mode: str = "sim",
+        on_submit_order: Optional[Callable] = None,
+        on_cancel_order: Optional[Callable[[str], None]] = None,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self.bridge = bridge
+        self.on_submit_order = on_submit_order
+        self.on_cancel_order = on_cancel_order
         self.setWindowTitle("Bots Institucionais – Tape Reading")
         self.theme = Theme(theme_mode)
         self._apply_theme()
 
         self.settings = QtCore.QSettings("BotsInstitucionais", "InstitutionalUI")
         self._profile_key = f"profile/{os.getenv('PROFILE', 'default')}"
+        self.workspace = WorkspaceManager(self, self.settings)
 
-        # Central placeholder
-        central_label = QtWidgets.QLabel("Microstructure View")
-        central_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.setCentralWidget(central_label)
+        self._load_qss(theme_mode)
+
+        # Central chart
+        self.chart = _ExecutionChart(bridge)
+        self.setCentralWidget(self.chart)
 
         # Panels
         self.dom_panel = DomPanel()
@@ -55,7 +116,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.footprint_panel.connect_bridge(bridge)
         self.tape_panel.connect_bridge(bridge)
         self.strategy_panel.connect_bridge(bridge)
-        self.execution_panel.connect_bridge(bridge)
+        self.execution_panel.connect_bridge(bridge, on_cancel=self.on_cancel_order)
         self.metrics_panel.connect_bridge(bridge)
         self.logs_panel.connect_bridge(bridge)
         self.status_widget.connect_bridge(bridge, mode=mode)
@@ -73,6 +134,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.statusBar().addPermanentWidget(self.status_widget)
 
         self._build_menu()
+        self._build_toolbar()
         self.restore_state()
 
     def _apply_theme(self) -> None:
@@ -80,6 +142,12 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         if app:
             app.setPalette(self.theme.palette)
             app.setFont(self.theme.font)
+
+    def _load_qss(self, mode: str) -> None:
+        file = "ui/themes/institutional_dark.qss" if mode == "dark" else "ui/themes/institutional_light.qss"
+        if os.path.exists(file):
+            with open(file, "r", encoding="utf-8") as f:
+                QtWidgets.QApplication.instance().setStyleSheet(f.read())  # type: ignore
 
     def _add_dock(self, title: str, widget: QtWidgets.QWidget, area: QtCore.Qt.DockWidgetArea) -> None:
         dock = QtWidgets.QDockWidget(title, self)
@@ -105,7 +173,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
             view_menu.addAction(action)
 
         mode_menu = menubar.addMenu("&Mode")
-        for mode in ("live", "paper", "replay"):
+        for mode in ("live", "paper", "replay", "sim"):
             act = mode_menu.addAction(mode.title())
             act.setData(mode)
             act.triggered.connect(lambda checked=False, m=mode: self._on_mode_change(m))
@@ -113,6 +181,34 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         help_menu = menubar.addMenu("&Help")
         about_action = help_menu.addAction("About")
         about_action.triggered.connect(self._show_about)
+
+    def _build_toolbar(self) -> None:
+        toolbar = QtWidgets.QToolBar("Main")
+        toolbar.setMovable(True)
+        icon_path = "ui/themes/icons/"
+
+        ticket_act = QtGui.QAction(QtGui.QIcon(icon_path + "ticket.svg"), "Order Ticket", self)
+        ticket_act.triggered.connect(self._open_ticket)
+        ws_act = QtGui.QAction(QtGui.QIcon(icon_path + "workspace.svg"), "Switch Workspace", self)
+        ws_act.triggered.connect(self._load_workspace)
+        reset_act = QtGui.QAction(QtGui.QIcon(icon_path + "reset.svg"), "Reset Layout", self)
+        reset_act.triggered.connect(lambda: self.workspace.save_profile("default"))
+        settings_act = QtGui.QAction(QtGui.QIcon(icon_path + "settings.svg"), "Settings", self)
+        settings_act.triggered.connect(self._open_settings)
+        help_act = QtGui.QAction(QtGui.QIcon(icon_path + "help.svg"), "About", self)
+        help_act.triggered.connect(self._show_about)
+        replay_act = QtGui.QAction(QtGui.QIcon(icon_path + "replay.svg"), "Replay Mode", self)
+        replay_act.triggered.connect(lambda: self._on_mode_change("replay"))
+
+        toolbar.addAction(ticket_act)
+        toolbar.addAction(ws_act)
+        toolbar.addAction(reset_act)
+        toolbar.addSeparator()
+        toolbar.addAction(replay_act)
+        toolbar.addAction(settings_act)
+        toolbar.addAction(help_act)
+
+        self.addToolBar(QtCore.Qt.TopToolBarArea, toolbar)
 
     def _on_mode_change(self, mode: str) -> None:
         self.status_widget.mode_label.setText(f"Mode: {mode}")
@@ -124,6 +220,20 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
             "Bots Institucionais – UI\nPhases I–VII\nEvent-driven microstructure + execution stack.",
         )
 
+    def _open_ticket(self) -> None:
+        ticket = OrderTicket(on_submit=self.on_submit_order, on_cancel=self.on_cancel_order, parent=self)
+        ticket.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        ticket.show()
+
+    def _load_workspace(self) -> None:
+        name, ok = QtWidgets.QInputDialog.getText(self, "Load workspace", "Profile name:", text="default")
+        if ok and name:
+            self.workspace.load_profile(name)
+
+    def _open_settings(self) -> None:
+        dlg = SettingsWindow({}, parent=self)
+        dlg.exec()
+
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self.save_state()
         super().closeEvent(event)
@@ -133,6 +243,7 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("state", self.saveState())
         self.settings.endGroup()
+        self.workspace.save_profile("last")
 
     def restore_state(self) -> None:
         self.settings.beginGroup(self._profile_key)
@@ -143,4 +254,4 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         if state:
             self.restoreState(state)
         self.settings.endGroup()
-
+        self.workspace.ensure_default()

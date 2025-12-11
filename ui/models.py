@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from PySide6 import QtCore
+from PySide6 import QtCore, QtGui
 
 
 class BaseTableModel(QtCore.QAbstractTableModel):
@@ -40,11 +41,21 @@ class BaseTableModel(QtCore.QAbstractTableModel):
 
 
 class DomTableModel(BaseTableModel):
+    """
+    DOM ladder with memory of previous levels to highlight stacking/pulling in delegates.
+    """
+
     def __init__(self) -> None:
         super().__init__(["Price", "Bid Size", "Ask Size", "Liquidity"])
+        self.prev: Dict[float, Tuple[float, float]] = {}
 
     def update_from_dom(self, ladder: List[Tuple[float, float, float, float]]) -> None:
-        rows = [[f"{p:.2f}", f"{b:.0f}", f"{a:.0f}", f"{l:.2f}"] for p, b, a, l in ladder]
+        rows = []
+        new_prev: Dict[float, Tuple[float, float]] = {}
+        for p, b, a, l in ladder:
+            rows.append([p, b, a, l])
+            new_prev[p] = (b, a)
+        self.prev = new_prev
         self.reset_with_rows(rows)
 
 
@@ -52,43 +63,60 @@ class TapeTableModel(BaseTableModel):
     def __init__(self) -> None:
         super().__init__(["Time", "Price", "Size", "Side", "Flags"])
 
+    def flags_for_trade(self, trade: Dict[str, Any]) -> str:
+        flags = []
+        if trade.get("size", 0) and float(trade["size"]) > 100:
+            flags.append("BLOCK")
+        if trade.get("speed", 0) and float(trade["speed"]) > 5:
+            flags.append("FAST")
+        return ",".join(flags)
+
     def append_trade(self, trade: Dict[str, Any]) -> None:
         ts = trade.get("ts") or datetime.utcnow().strftime("%H:%M:%S")
         row = [
             ts,
-            f\"{trade.get('price', 0):.2f}\",
-            f\"{trade.get('size', 0):.0f}\",
-            trade.get(\"side\", \"?\"),
-            trade.get(\"flags\", \"\"),
+            float(trade.get("price", 0)),
+            float(trade.get("size", 0)),
+            trade.get("side", "?"),
+            trade.get("flags", self.flags_for_trade(trade)),
         ]
         self.beginInsertRows(QtCore.QModelIndex(), 0, 0)
         self.rows.insert(0, row)
         self.endInsertRows()
 
 
-class FootprintModel(BaseTableModel):
+class FootprintModel(QtCore.QObject):
+    """
+    Footprint matrix representation for custom painting.
+    """
+
+    changed = QtCore.Signal()
+
     def __init__(self) -> None:
-        super().__init__(["Price", "Buy Vol", "Sell Vol", "Imbalance"])
+        super().__init__()
+        self.matrix: Dict[float, Dict[str, float]] = {}
 
     def update_footprint(self, footprint: Dict[float, Dict[str, float]]) -> None:
-        rows: List[List[Any]] = []
-        for price, vols in sorted(footprint.items(), reverse=True):
-            buy = vols.get("buy", 0.0)
-            sell = vols.get("sell", 0.0)
-            imbalance = buy - sell
-            rows.append([f"{price:.2f}", f"{buy:.0f}", f"{sell:.0f}", f"{imbalance:.0f}"])
-        self.reset_with_rows(rows)
+        self.matrix = footprint
+        self.changed.emit()
 
 
-class DeltaSeriesModel(BaseTableModel):
+class DeltaSeriesModel(QtCore.QObject):
+    """
+    Holds a time series for pyqtgraph plotting.
+    """
+
+    changed = QtCore.Signal()
+
     def __init__(self) -> None:
-        super().__init__(["Time", "CVD"])
+        super().__init__()
+        self.ts: List[float] = []
+        self.values: List[float] = []
 
     def append_delta(self, ts: datetime, value: float) -> None:
-        row = [ts.strftime("%H:%M:%S"), f"{value:.0f}"]
-        self.beginInsertRows(QtCore.QModelIndex(), 0, 0)
-        self.rows.insert(0, row)
-        self.endInsertRows()
+        self.ts.append(ts.timestamp())
+        self.values.append(value)
+        self.changed.emit()
 
 
 class StrategySignalsModel(BaseTableModel):
@@ -96,11 +124,16 @@ class StrategySignalsModel(BaseTableModel):
         super().__init__(["Time", "Symbol", "Direction", "Score", "Tags"])
 
     def append_signal(self, sig: Dict[str, Any]) -> None:
+        ts_val: Any = sig.get("timestamp", datetime.utcnow())
+        if hasattr(ts_val, "strftime"):
+            ts_str = ts_val.strftime("%H:%M:%S")
+        else:
+            ts_str = str(ts_val)
         row = [
-            sig.get("timestamp", datetime.utcnow()).strftime("%H:%M:%S") if hasattr(sig.get("timestamp"), "strftime") else str(sig.get("timestamp", "")),
+            ts_str,
             sig.get("symbol", ""),
             sig.get("direction", ""),
-            f"{sig.get('score', 0):.2f}",
+            float(sig.get("score", 0.0)),
             sig.get("metadata", {}).get("tags", ""),
         ]
         self.beginInsertRows(QtCore.QModelIndex(), 0, 0)
@@ -120,9 +153,9 @@ class ExecutionOrdersModel(BaseTableModel):
             evt.get("symbol", ""),
             evt.get("side", ""),
             evt.get("status", ""),
-            f"{evt.get('filled_qty', 0):.2f}",
-            f\"{evt.get('avg_price', evt.get('limit_price', 0) or 0):.2f}\",
-            f\"{evt.get('slippage_bps', 0):.2f}\",
+            float(evt.get("filled_qty", evt.get("quantity", 0))),
+            float(evt.get("avg_price", evt.get("limit_price", 0) or 0)),
+            float(evt.get("slippage_bps", 0)),
         ]
         if existing_idx is None:
             self.beginInsertRows(QtCore.QModelIndex(), 0, 0)
@@ -143,3 +176,20 @@ class MetricsModel(BaseTableModel):
         rows = [[k, str(v)] for k, v in metrics.items()]
         self.reset_with_rows(rows)
 
+
+class LogModel(BaseTableModel):
+    def __init__(self) -> None:
+        super().__init__(["Record"])
+
+    def append(self, record: str) -> None:
+        self.beginInsertRows(QtCore.QModelIndex(), 0, 0)
+        self.rows.insert(0, [record])
+        self.endInsertRows()
+
+
+@dataclass
+class ExecutionMarker:
+    ts: float
+    price: float
+    side: str
+    qty: float

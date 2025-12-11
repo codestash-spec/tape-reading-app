@@ -36,5 +36,8 @@ class StrategyPanel(QtWidgets.QWidget):
 
     def append_signal(self, sig: Dict) -> None:
         self.model.append_signal(sig)
-        score = float(sig.get("score", 0.0))
-        self.opportunity.setValue(min(100, int(abs(score) * 100)))
+        try:
+            score = float(sig.get("score", 0.0))
+        except Exception:
+            score = 0.0
+        self.opportunity.setValue(min(100, max(0, int(abs(score) * 100))))

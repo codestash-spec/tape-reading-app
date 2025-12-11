@@ -17,42 +17,49 @@ class _FootprintCanvas(QtWidgets.QWidget):
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
         painter = QtGui.QPainter(self)
-        painter.fillRect(self.rect(), QtGui.QColor(brand.BG_PANEL))
-        fp = self.model.matrix
-        if not fp:
+        try:
+            painter.fillRect(self.rect(), QtGui.QColor(brand.BG_PANEL))
+            fp = self.model.matrix
+            if not fp:
+                return
+            prices = []
+            for p in fp.keys():
+                try:
+                    prices.append(float(p))
+                except Exception:
+                    continue
+            prices = sorted(prices, reverse=True)
+            if not prices:
+                return
+            max_vol = max((max(v.get("buy", 0.0), v.get("sell", 0.0)) for v in fp.values()), default=1.0)
+            cell_h = max(14, int(self.height() / len(prices)))
+            cell_w = self.width() // 2
+            y = 0
+            for price in prices:
+                vols = fp.get(price, {})
+                buy = float(vols.get("buy", 0.0)) if isinstance(vols, dict) else 0.0
+                sell = float(vols.get("sell", 0.0)) if isinstance(vols, dict) else 0.0
+                buy_intensity = min(1.0, buy / max_vol) if max_vol else 0.0
+                sell_intensity = min(1.0, sell / max_vol) if max_vol else 0.0
+
+                buy_rect = QtCore.QRect(0, y, cell_w, cell_h - 1)
+                sell_rect = QtCore.QRect(cell_w, y, cell_w, cell_h - 1)
+                buy_color = QtGui.QColor(18, 216, 250)
+                buy_color.setAlphaF(0.1 + 0.8 * buy_intensity)
+                sell_color = QtGui.QColor(255, 95, 86)
+                sell_color.setAlphaF(0.1 + 0.8 * sell_intensity)
+
+                painter.fillRect(buy_rect, buy_color)
+                painter.fillRect(sell_rect, sell_color)
+
+                painter.setPen(QtGui.QPen(QtGui.QColor(brand.TEXT_LIGHT)))
+                painter.drawText(buy_rect.adjusted(4, 0, -4, 0), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, f"{buy:.0f}")
+                painter.drawText(sell_rect.adjusted(4, 0, -4, 0), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, f"{sell:.0f}")
+                painter.drawText(QtCore.QRect(0, y, self.width(), cell_h), QtCore.Qt.AlignCenter, f"{price:.2f}")
+
+                y += cell_h
+        finally:
             painter.end()
-            return
-        prices = sorted(fp.keys(), reverse=True)
-        if not prices:
-            painter.end()
-            return
-        max_vol = max((max(v.get("buy", 0.0), v.get("sell", 0.0)) for v in fp.values()), default=1.0)
-        cell_h = max(14, int(self.height() / len(prices)))
-        cell_w = self.width() // 2
-        y = 0
-        for price in prices:
-            vols = fp[price]
-            buy = vols.get("buy", 0.0)
-            sell = vols.get("sell", 0.0)
-            buy_intensity = min(1.0, buy / max_vol)
-            sell_intensity = min(1.0, sell / max_vol)
-
-            buy_rect = QtCore.QRect(0, y, cell_w, cell_h - 1)
-            sell_rect = QtCore.QRect(cell_w, y, cell_w, cell_h - 1)
-            buy_color = QtGui.QColor(18, 216, 250)
-            buy_color.setAlphaF(0.1 + 0.8 * buy_intensity)
-            sell_color = QtGui.QColor(255, 95, 86)
-            sell_color.setAlphaF(0.1 + 0.8 * sell_intensity)
-
-            painter.fillRect(buy_rect, buy_color)
-            painter.fillRect(sell_rect, sell_color)
-
-            painter.setPen(QtGui.QPen(QtGui.QColor(brand.TEXT_LIGHT)))
-            painter.drawText(buy_rect.adjusted(4, 0, -4, 0), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, f"{buy:.0f}")
-            painter.drawText(sell_rect.adjusted(4, 0, -4, 0), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, f"{sell:.0f}")
-            painter.drawText(QtCore.QRect(0, y, self.width(), cell_h), QtCore.Qt.AlignCenter, f"{price:.2f}")
-
-            y += cell_h
 
 
 class FootprintPanel(QtWidgets.QWidget):

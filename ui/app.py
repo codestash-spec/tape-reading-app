@@ -14,6 +14,7 @@ from core.config import load_settings
 from core.event_bus import EventBus
 from core.logging import configure_logging
 from engines.microstructure.engine import MicrostructureEngine
+from engines.ohlc.engine import OHLCEngine
 from engines.liquidity_map.engine import LiquidityMapEngine
 from engines.volume_profile.engine import VolumeProfileEngine
 from engines.volatility.engine import VolatilityEngine
@@ -79,6 +80,7 @@ def main(argv: List[str] | None = None) -> int:
     # Engines and strategy
     micro = MicrostructureEngine(bus, symbols)
     micro.start()
+    ohlc = OHLCEngine(bus, timeframe_seconds=settings.ui.get("ohlc_seconds", 1))
     # Institutional engines
     liq_map_engine = LiquidityMapEngine(bus)
     vol_profile_engine = VolumeProfileEngine(bus)

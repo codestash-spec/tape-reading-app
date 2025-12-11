@@ -37,6 +37,7 @@ class EventBridge(QtCore.QObject):
     metricsUpdated = QtCore.Signal(dict)
     logReceived = QtCore.Signal(str)
     alertReceived = QtCore.Signal(dict)
+    chartUpdated = QtCore.Signal(dict)
 
     def __init__(self, bus: EventBus, parent: Optional[QtCore.QObject] = None) -> None:
         super().__init__(parent)
@@ -143,6 +144,8 @@ class EventBridge(QtCore.QObject):
             self.logReceived.emit(msg)
         elif et == "alert_event":
             self.alertReceived.emit(payload)
+        elif et == "chart_ohlc":
+            self.chartUpdated.emit(payload)
 
     def _attach_logging(self) -> None:
         if self._logger_handler:

@@ -36,6 +36,10 @@ class _ExecutionChart(QtWidgets.QWidget):
         super().__init__(parent)
         self.bridge = bridge
         self.plot = pg.PlotWidget(background=brand.BG_DARK)
+        try:
+            self.plot.setViewport(QtWidgets.QOpenGLWidget())
+        except Exception:
+            pass
         self.plot.showGrid(x=True, y=True, alpha=0.25)
         self.price_curve = self.plot.plot(pen=pg.mkPen(brand.ACCENT, width=2))
         self.fill_scatter = pg.ScatterPlotItem(symbol="o", size=8, brush=pg.mkBrush(brand.SUCCESS))
@@ -43,14 +47,31 @@ class _ExecutionChart(QtWidgets.QWidget):
         self.ts: list[float] = []
         self.prices: list[float] = []
         self.fills: list[dict] = []
+        self.candles: list[dict] = []
+        self.mode = "line"  # or "candles"
+
+        # toggle buttons
+        btn_line = QtWidgets.QPushButton("Line")
+        btn_candles = QtWidgets.QPushButton("Candles")
+        btn_line.setCheckable(True)
+        btn_candles.setCheckable(True)
+        btn_line.setChecked(True)
+        btn_line.clicked.connect(lambda: self._set_mode("line", btn_line, btn_candles))
+        btn_candles.clicked.connect(lambda: self._set_mode("candles", btn_line, btn_candles))
+        btn_bar = QtWidgets.QHBoxLayout()
+        btn_bar.addWidget(btn_line)
+        btn_bar.addWidget(btn_candles)
+        btn_bar.addStretch()
 
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(btn_bar)
         layout.addWidget(self.plot)
         self.setLayout(layout)
 
         bridge.microstructureUpdated.connect(self.on_snapshot)
         bridge.orderStatusUpdated.connect(self.on_order)
+        bridge.chartUpdated.connect(self.on_candle)
 
     def on_snapshot(self, snap: dict) -> None:
         mid = snap.get("mid") or snap.get("price")
@@ -62,7 +83,8 @@ class _ExecutionChart(QtWidgets.QWidget):
             return
         self.ts.append(len(self.ts))
         self.prices.append(mid_f)
-        self.price_curve.setData(self.ts, self.prices)
+        if self.mode == "line":
+            self.price_curve.setData(self.ts, self.prices)
 
     def on_order(self, evt: dict) -> None:
         if evt.get("status") not in ("fill", "partial_fill", "FILL", "PARTIAL"):
@@ -76,6 +98,49 @@ class _ExecutionChart(QtWidgets.QWidget):
             }
             for f in self.fills
         ]
+        self.fill_scatter.setData(spots)
+
+    def on_candle(self, bar: dict) -> None:
+        self.candles.append(bar)
+        if self.mode == "candles":
+            self._draw_candles()
+
+    def _set_mode(self, mode: str, btn_line: QtWidgets.QPushButton, btn_candles: QtWidgets.QPushButton) -> None:
+        self.mode = mode
+        btn_line.setChecked(mode == "line")
+        btn_candles.setChecked(mode == "candles")
+        if mode == "line":
+            self.price_curve.setVisible(True)
+            self._draw_line()
+        else:
+            self.price_curve.setVisible(False)
+            self._draw_candles()
+
+    def _draw_line(self) -> None:
+        self.price_curve.setData(self.ts, self.prices)
+
+    def _draw_candles(self) -> None:
+        if not self.candles:
+            return
+        xs = []
+        ys = []
+        brushes = []
+        pens = []
+        for i, c in enumerate(self.candles[-300:]):
+            x = i
+            o = c["open"]
+            h = c["high"]
+            l = c["low"]
+            cl = c["close"]
+            color = QtGui.QColor("#12d8fa") if cl >= o else QtGui.QColor("#ff5f56")
+            pens.append(pg.mkPen(color))
+            brushes.append(pg.mkBrush(color))
+            xs.append(x)
+            ys.append((o, h, l, cl))
+        # Use error bars style (simple vertical line + body)
+        spots = []
+        for i, (x, (o, h, l, cl)) in enumerate(zip(xs, ys)):
+            spots.append({"pos": (x, cl), "brush": brushes[i], "pen": pens[i], "size": 8})
         self.fill_scatter.setData(spots)
 
 

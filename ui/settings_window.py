@@ -58,6 +58,12 @@ class SettingsWindow(QtWidgets.QDialog):
         self.dom_depth_combo.addItems(["10", "20", "50", "100"])
         self.delta_mode_combo = QtWidgets.QComboBox()
         self.delta_mode_combo.addItems(["stream", "cumulative", "footprint"])
+        if self.settings:
+            provider = self.settings.get("provider")
+            if provider:
+                idx = self.provider_combo.findText(str(provider))
+                if idx >= 0:
+                    self.provider_combo.setCurrentIndex(idx)
         layout = QtWidgets.QFormLayout(w)
         layout.addRow("Mode", self.mode_combo)
         layout.addRow("Provider", self.provider_combo)

@@ -83,13 +83,15 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         mode: str = "sim",
         on_submit_order: Optional[Callable] = None,
         on_cancel_order: Optional[Callable[[str], None]] = None,
+        provider_manager=None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.bridge = bridge
         self.on_submit_order = on_submit_order
         self.on_cancel_order = on_cancel_order
-        self.setWindowTitle("Bots Institucionais – Tape Reading")
+        self.provider_manager = provider_manager
+        self.setWindowTitle("Bots Institucionais - Tape Reading")
         self.theme = Theme(theme_mode)
         self._apply_theme()
 
@@ -236,8 +238,16 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
             self.workspace.load_profile(name)
 
     def _open_settings(self) -> None:
-        dlg = SettingsWindow({}, parent=self)
+        current = {
+            "provider": self.provider_manager.active_name if self.provider_manager else None,
+        }
+        dlg = SettingsWindow(current, on_apply=self._apply_settings, parent=self)
         dlg.exec()
+
+    def _apply_settings(self, cfg: dict) -> None:
+        if self.provider_manager and cfg.get("provider"):
+            self.provider_manager.start(cfg["provider"])
+            self.status_widget.conn_label.setText(f"Conn: {cfg['provider']}")
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self.save_state()

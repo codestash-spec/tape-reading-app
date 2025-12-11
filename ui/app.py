@@ -62,17 +62,19 @@ def main(argv: List[str] | None = None) -> int:
     log = logging.getLogger(__name__)
 
     bus = EventBus()
-    symbols = settings.symbols
+    symbols = settings.symbols or ["BTCUSDT"]
+    if not settings.market_symbol:
+        settings.market_symbol = "BTCUSDT"
     pm_settings = {
         "symbols": symbols,
-        "market_symbol": settings.market_symbol,
+        "market_symbol": settings.market_symbol or "BTCUSDT",
         "execution_symbol": settings.execution_symbol,
         "execution_provider": settings.execution_provider,
         "ui": settings.ui,
         "instrument_type": None,
     }
     provider_manager = ProviderManager(bus, pm_settings)
-    autodetect = provider_manager.auto_start()
+    autodetect = provider_manager.auto_start(settings.market_symbol or "BTCUSDT")
 
     # Engines and strategy
     micro = MicrostructureEngine(bus, symbols)
@@ -129,6 +131,7 @@ def main(argv: List[str] | None = None) -> int:
         event_bus=bus,
         pm_settings=pm_settings,
     )
+    window.market_watch.apply_on_start(settings.market_symbol or "BTCUSDT")
     window.resize(1400, 900)
     window.show()
     splash.finish(window)

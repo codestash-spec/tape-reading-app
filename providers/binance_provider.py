@@ -22,6 +22,9 @@ class BinanceProvider(ProviderBase):
         super().__init__(event_bus, settings, symbol)
         self._loop: asyncio.AbstractEventLoop | None = None
         self._ws_tasks = []
+        self._failures = 0
+        self._best_bid = None
+        self._best_ask = None
 
     def start(self) -> None:
         try:
@@ -65,7 +68,12 @@ class BinanceProvider(ProviderBase):
                             continue
                         handler(data)
             except Exception as exc:
-                logging.getLogger(__name__).warning("Binance WS reconnecting after error: %s", exc)
+                self._failures += 1
+                logging.getLogger(__name__).warning("Binance WS reconnecting after error: %s (fail=%s)", exc, self._failures)
+                if self._failures >= 3:
+                    logging.getLogger(__name__).error("Binance WS failed 3 times; falling back to mock provider.")
+                    self._start_thread(self._run_mock)
+                    return
                 await asyncio.sleep(1.0)
 
     def _run_ws(self) -> None:
@@ -76,9 +84,13 @@ class BinanceProvider(ProviderBase):
         stream = self.symbol.lower()
         depth_url = f"wss://fstream.binance.com/ws/{stream}@depth20@100ms"
         trade_url = f"wss://fstream.binance.com/ws/{stream}@trade"
+        ticker_url = f"wss://fstream.binance.com/ws/{stream}@ticker"
+        book_url = f"wss://fstream.binance.com/ws/{stream}@bookTicker"
         self._ws_tasks = [
             self._loop.create_task(self._ws_consume(depth_url, self._handle_depth)),
             self._loop.create_task(self._ws_consume(trade_url, self._handle_trade)),
+            self._loop.create_task(self._ws_consume(ticker_url, self._handle_ticker)),
+            self._loop.create_task(self._ws_consume(book_url, self._handle_book)),
         ]
         self._loop.run_forever()
 
@@ -90,14 +102,40 @@ class BinanceProvider(ProviderBase):
             dom.append({"price": float(p), "bid_size": float(s), "ask_size": 0.0})
         for p, s, *_ in asks:
             dom.append({"price": float(p), "bid_size": 0.0, "ask_size": float(s)})
-        evt = self.normalize_dom({"dom": dom, "last": None})
+        last = self._best_bid if self._best_bid and self._best_ask else None
+        evt = self.normalize_dom({"dom": dom, "last": last})
         self.bus.publish(evt)
 
     def _handle_trade(self, data: dict) -> None:
         price = float(data.get("p", 0))
         size = float(data.get("q", 0))
-        side = "buy" if data.get("m") is False else "sell"
+        side = "sell" if data.get("m", True) else "buy"
         evt = self.normalize_trade({"price": price, "size": size, "side": side})
+        self.bus.publish(evt)
+
+    def _handle_book(self, data: dict) -> None:
+        bid = data.get("b")
+        ask = data.get("a")
+        try:
+            self._best_bid = float(bid)
+            self._best_ask = float(ask)
+        except Exception:
+            pass
+
+    def _handle_ticker(self, data: dict) -> None:
+        payload = {
+            "last": float(data.get("c", 0.0)),
+            "change": float(data.get("P", 0.0)),
+            "volume": float(data.get("v", 0.0)),
+            "provider": "binance",
+        }
+        evt = MarketEvent(
+            event_type="quote",
+            timestamp=datetime.now(timezone.utc),
+            source="binance",
+            symbol=self.symbol,
+            payload=payload,
+        )
         self.bus.publish(evt)
 
     def _run_mock(self) -> None:
@@ -135,10 +173,25 @@ class BinanceProvider(ProviderBase):
             payload={
                 "price": raw.get("price"),
                 "size": raw.get("size"),
-                "side": raw.get("side", "unknown"),
+                "side": self._side_from_book(raw),
             },
         )
         if self.debug:
             import logging
             logging.getLogger(__name__).debug("[BinanceProvider] normalize_trade raw=%s evt=%s", raw, evt)
         return evt
+
+    def _side_from_book(self, raw: Any) -> str:
+        side = raw.get("side")
+        if side:
+            return side
+        price = raw.get("price")
+        try:
+            p = float(price)
+            if self._best_ask and p >= self._best_ask:
+                return "buy"
+            if self._best_bid and p <= self._best_bid:
+                return "sell"
+        except Exception:
+            pass
+        return "unknown"

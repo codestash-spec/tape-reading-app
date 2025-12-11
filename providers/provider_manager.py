@@ -71,8 +71,8 @@ class ProviderManager:
     def switch(self, name: str) -> None:
         self.start(name)
 
-    def auto_start(self) -> Dict[str, Any]:
-        symbol = self.settings.get("market_symbol") or (self.settings.get("symbols") or ["XAUUSD"])[0]
+    def auto_start(self, symbol: str | None = None) -> Dict[str, Any]:
+        symbol = symbol or self.settings.get("market_symbol") or (self.settings.get("symbols") or ["XAUUSD"])[0]
         info = detect_instrument(symbol)
         self.log.info(
             "[AutoDetect] symbol=%s type=%s provider=%s execution_provider=%s",

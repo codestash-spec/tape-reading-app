@@ -52,6 +52,7 @@ class MarketWatchPanel(QtWidgets.QWidget):
         self.setLayout(layout)
 
         self._populate(self.watchlists.get("default", []))
+        self._initial_applied = False
 
     def _load_watchlists(self) -> Dict[str, List[str]]:
         if not os.path.exists(self.watchlist_path):
@@ -168,3 +169,14 @@ class MarketWatchPanel(QtWidgets.QWidget):
         if col == 0:
             sym = self.table.item(row, 0).text()
             self.instrumentSelected.emit(sym)
+
+    def apply_on_start(self, symbol: str) -> None:
+        """Selects and emits the given symbol once on startup."""
+        if self._initial_applied:
+            return
+        for row in range(self.table.rowCount()):
+            if self.table.item(row, 0).text().upper() == symbol.upper():
+                self.table.selectRow(row)
+                self.instrumentSelected.emit(symbol)
+                self._initial_applied = True
+                break

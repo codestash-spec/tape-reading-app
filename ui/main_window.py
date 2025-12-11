@@ -5,6 +5,7 @@ from typing import Callable, Optional
 
 import pyqtgraph as pg
 from PySide6 import QtCore, QtGui, QtWidgets
+from pyqtgraph.dockarea import DockArea, Dock
 
 from ui.event_bridge import EventBridge
 from ui.themes import Theme
@@ -19,6 +20,13 @@ from ui.widgets.metrics_panel import MetricsPanel
 from ui.widgets.logs_panel import LogsPanel
 from ui.widgets.status_bar_widget import StatusBarWidget
 from ui.widgets.order_ticket import OrderTicket
+from ui.widgets.liquidity_map_panel import LiquidityMapPanel
+from ui.widgets.volume_profile_panel import VolumeProfilePanel
+from ui.widgets.heatmap_panel import HeatmapPanel
+from ui.widgets.alerts_panel import AlertsPanel
+from ui.widgets.regime_panel import RegimePanel
+from ui.widgets.volatility_panel import VolatilityPanel
+from ui.widgets.market_watch_panel import MarketWatchPanel
 from ui.workspace_manager import WorkspaceManager
 from ui.settings_window import SettingsWindow
 
@@ -103,7 +111,8 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
 
         # Central chart
         self.chart = _ExecutionChart(bridge)
-        self.setCentralWidget(self.chart)
+        self.area = DockArea()
+        self.setCentralWidget(self.area)
 
         # Panels
         self.dom_panel = DomPanel()
@@ -114,6 +123,13 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.execution_panel = ExecutionPanel()
         self.metrics_panel = MetricsPanel()
         self.logs_panel = LogsPanel()
+        self.liquidity_panel = LiquidityMapPanel()
+        self.vol_profile_panel = VolumeProfilePanel()
+        self.heatmap_panel = HeatmapPanel()
+        self.alerts_panel = AlertsPanel()
+        self.regime_panel = RegimePanel()
+        self.vol_panel = VolatilityPanel()
+        self.market_watch = MarketWatchPanel()
         self.status_widget = StatusBarWidget()
 
         # Wire bridge
@@ -125,17 +141,27 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.execution_panel.connect_bridge(bridge, on_cancel=self.on_cancel_order)
         self.metrics_panel.connect_bridge(bridge)
         self.logs_panel.connect_bridge(bridge)
+        self.liquidity_panel.connect_bridge(bridge)
+        self.vol_profile_panel.connect_bridge(bridge)
+        self.regime_panel.connect_bridge(bridge)
+        self.vol_panel.connect_bridge(bridge)
         self.status_widget.connect_bridge(bridge, mode=mode)
 
-        # Docks
-        self._add_dock("DOM", self.dom_panel, QtCore.Qt.LeftDockWidgetArea)
-        self._add_dock("Delta", self.delta_panel, QtCore.Qt.LeftDockWidgetArea)
-        self._add_dock("Footprint", self.footprint_panel, QtCore.Qt.LeftDockWidgetArea)
-        self._add_dock("Tape", self.tape_panel, QtCore.Qt.BottomDockWidgetArea)
-        self._add_dock("Strategy", self.strategy_panel, QtCore.Qt.RightDockWidgetArea)
-        self._add_dock("Execution", self.execution_panel, QtCore.Qt.RightDockWidgetArea)
-        self._add_dock("Metrics", self.metrics_panel, QtCore.Qt.BottomDockWidgetArea)
-        self._add_dock("Logs", self.logs_panel, QtCore.Qt.BottomDockWidgetArea)
+        # DockArea layout
+        self.area.addDock(Dock("Chart", widget=self.chart))
+        self.area.addDock(Dock("DOM", widget=self.dom_panel), "left", self.area.docks["Chart"])
+        self.area.addDock(Dock("Delta", widget=self.delta_panel), "above", self.area.docks["DOM"])
+        self.area.addDock(Dock("Footprint", widget=self.footprint_panel), "above", self.area.docks["Delta"])
+        self.area.addDock(Dock("Tape", widget=self.tape_panel), "bottom", self.area.docks["Chart"])
+        self.area.addDock(Dock("Strategy", widget=self.strategy_panel), "right", self.area.docks["Chart"])
+        self.area.addDock(Dock("Execution", widget=self.execution_panel), "bottom", self.area.docks["Strategy"])
+        self.area.addDock(Dock("Metrics", widget=self.metrics_panel), "bottom", self.area.docks["Execution"])
+        self.area.addDock(Dock("Logs", widget=self.logs_panel), "bottom", self.area.docks["Tape"])
+        self.area.addDock(Dock("Liquidity", widget=self.liquidity_panel), "right", self.area.docks["Execution"])
+        self.area.addDock(Dock("VolumeProfile", widget=self.vol_profile_panel), "above", self.area.docks["Liquidity"])
+        self.area.addDock(Dock("Regime", widget=self.regime_panel), "above", self.area.docks["VolumeProfile"])
+        self.area.addDock(Dock("Volatility", widget=self.vol_panel), "above", self.area.docks["Regime"])
+        self.area.addDock(Dock("MarketWatch", widget=self.market_watch), "right", self.area.docks["Regime"])
 
         self.statusBar().addPermanentWidget(self.status_widget)
 

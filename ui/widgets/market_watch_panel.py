@@ -4,9 +4,10 @@ import json
 import os
 from typing import Dict, List, Optional
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets, QtGui
 
 from ui.event_bridge import EventBridge
+from ui.themes import brand
 
 
 DEFAULT_WATCHLISTS = {
@@ -34,6 +35,7 @@ class MarketWatchPanel(QtWidgets.QWidget):
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.cellClicked.connect(self._on_cell_clicked)
+        self.table.setFont(QtGui.QFont(brand.FONT_FAMILY, brand.FONT_MEDIUM))
 
         self.add_btn = QtWidgets.QPushButton("+ Add Instrument")
         self.add_btn.clicked.connect(self._add_instrument)

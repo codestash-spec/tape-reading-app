@@ -13,7 +13,7 @@ class Theme:
     def __init__(self, mode: str = "dark") -> None:
         self.mode = mode
         self.palette = self._build_palette(mode)
-        self.font = QtGui.QFont(brand.FONT_FAMILY, brand.FONT_SIZE)
+        self.font = QtGui.QFont(brand.FONT_FAMILY, brand.FONT_MEDIUM)
 
     def _build_palette(self, mode: str) -> QtGui.QPalette:
         palette = QtGui.QPalette()
@@ -30,4 +30,3 @@ class Theme:
         else:
             palette = QtGui.QPalette()
         return palette
-

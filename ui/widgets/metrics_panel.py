@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Dict, Any
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets, QtGui
 
 from ui.event_bridge import EventBridge
+from ui.themes import brand
 
 
 class MetricsModel(QtCore.QAbstractTableModel):
@@ -44,6 +45,7 @@ class MetricsPanel(QtWidgets.QWidget):
         self.model = MetricsModel()
         self.view = QtWidgets.QTableView()
         self.view.setModel(self.model)
+        self.view.setFont(QtGui.QFont(brand.FONT_FAMILY, brand.FONT_SMALL))
         self.view.verticalHeader().setVisible(False)
         self.view.horizontalHeader().setStretchLastSection(True)
         self.view.setAlternatingRowColors(True)

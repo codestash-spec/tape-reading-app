@@ -87,6 +87,7 @@ class TapePanel(QtWidgets.QWidget):
         self.view = QtWidgets.QTableView()
         self.view.setModel(self.model)
         self.view.setItemDelegate(TapeDelegate(self.view))
+        self.view.setFont(QtGui.QFont(brand.FONT_FAMILY, brand.FONT_MEDIUM))
         self.view.verticalHeader().setVisible(False)
         self.view.horizontalHeader().setStretchLastSection(True)
         self.view.setAlternatingRowColors(True)

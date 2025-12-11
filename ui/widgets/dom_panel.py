@@ -106,6 +106,7 @@ class DomPanel(QtWidgets.QWidget):
         self.view = QtWidgets.QTableView()
         self.view.setModel(self.model)
         self.view.setItemDelegate(DomDelegate(self.model, self.view))
+        self.view.setFont(QtGui.QFont(brand.FONT_FAMILY, brand.FONT_LARGE))
         self.view.verticalHeader().setVisible(False)
         self.view.horizontalHeader().setStretchLastSection(True)
         self.view.setAlternatingRowColors(True)
@@ -116,9 +117,13 @@ class DomPanel(QtWidgets.QWidget):
         self.heatmap.setMinimumHeight(80)
         self.heatmap.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.heatmap.setStyleSheet("background-color: #0f1b2b; border: 1px solid #1f2b3a;")
+        self.mid_label = QtWidgets.QLabel("Mid: -  Spread: -")
+        self.mid_label.setAlignment(QtCore.Qt.AlignLeft)
+        self.mid_label.setStyleSheet("color: #e0e6ed;")
 
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.mid_label)
         layout.addWidget(self.view)
         layout.addWidget(self.heatmap)
         self.setLayout(layout)
@@ -184,6 +189,16 @@ class DomPanel(QtWidgets.QWidget):
 
         rows = sorted(rows, key=lambda r: r[0], reverse=True)[:100]
         self.model.update_rows(rows, last_price)
+        # mid/spread display
+        if rows:
+            best_bid = max((r[0] for r in rows if r[1] > 0), default=None)
+            best_ask = min((r[0] for r in rows if r[2] > 0), default=None)
+            mid = None
+            spread = None
+            if best_bid and best_ask:
+                mid = (best_bid + best_ask) / 2
+                spread = best_ask - best_bid
+            self.mid_label.setText(f"Mid: {mid:.5f}" if mid else "Mid: - " + (f" Spread: {spread:.5f}" if spread else " Spread: -"))
         self._draw_heatmap(rows)
 
     def _draw_heatmap(self, rows: List[Tuple[float, float, float, float]]) -> None:

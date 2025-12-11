@@ -109,6 +109,7 @@ class FootprintPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self.model = FootprintModel()
         self.canvas = _FootprintCanvas(self.model)
+        self.canvas.setFont(QtGui.QFont(brand.FONT_FAMILY, brand.FONT_MEDIUM))
         self.canvas.setMinimumHeight(140)
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)

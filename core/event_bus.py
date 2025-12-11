@@ -45,6 +45,16 @@ class EventBus:
                 for et in event_type:
                     self._subscribers[et].append(callback)
 
+    def unsubscribe(self, event_type: str | Iterable[str], callback: Callback) -> None:
+        """
+        Remove a callback from one or more event types.
+        """
+        with self._lock:
+            types = [event_type] if isinstance(event_type, str) else list(event_type)
+            for et in types:
+                if et in self._subscribers and callback in self._subscribers[et]:
+                    self._subscribers[et].remove(callback)
+
     # --------------------------------------------------------
     # PUBLISH
     # --------------------------------------------------------

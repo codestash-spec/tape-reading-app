@@ -29,6 +29,47 @@ from ui.widgets.volatility_panel import VolatilityPanel
 from ui.widgets.market_watch_panel import MarketWatchPanel
 from ui.workspace_manager import WorkspaceManager
 from ui.settings_window import SettingsWindow
+from ui import helpers
+
+
+class CandlestickItem(pg.GraphicsObject):
+    """
+    Lightweight candlestick renderer adapted from pyqtgraph examples.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.data = []
+        self.picture = None
+
+    def setData(self, data) -> None:
+        self.data = data
+        self.picture = None
+        self.update()
+
+    def paint(self, p: QtGui.QPainter, *args) -> None:  # type: ignore[override]
+        if self.picture is None:
+            self.picture = QtGui.QPicture()
+            painter = QtGui.QPainter(self.picture)
+            for (x, open_, high, low, close) in self.data:
+                if close >= open_:
+                    pen = pg.mkPen("#12d8fa")
+                    brush = pg.mkBrush("#12d8fa")
+                else:
+                    pen = pg.mkPen("#ff5f56")
+                    brush = pg.mkBrush("#ff5f56")
+                # wick
+                painter.setPen(pen)
+                painter.drawLine(QtCore.QPointF(x, low), QtCore.QPointF(x, high))
+                # body
+                rect = QtCore.QRectF(x - 0.3, open_, 0.6, close - open_)
+                painter.fillRect(rect, brush)
+                painter.drawRect(rect)
+            painter.end()
+        p.drawPicture(0, 0, self.picture)
+
+    def boundingRect(self) -> QtCore.QRectF:  # type: ignore[override]
+        return QtCore.QRectF()
 
 
 class _ExecutionChart(QtWidgets.QWidget):
@@ -44,6 +85,8 @@ class _ExecutionChart(QtWidgets.QWidget):
         self.price_curve = self.plot.plot(pen=pg.mkPen(brand.ACCENT, width=2))
         self.fill_scatter = pg.ScatterPlotItem(symbol="o", size=8, brush=pg.mkBrush(brand.SUCCESS))
         self.plot.addItem(self.fill_scatter)
+        self.candle_item = CandlestickItem()
+        self.plot.addItem(self.candle_item)
         self.ts: list[float] = []
         self.prices: list[float] = []
         self.fills: list[dict] = []
@@ -72,6 +115,12 @@ class _ExecutionChart(QtWidgets.QWidget):
         bridge.microstructureUpdated.connect(self.on_snapshot)
         bridge.orderStatusUpdated.connect(self.on_order)
         bridge.chartUpdated.connect(self.on_candle)
+        # crosshair
+        self.vLine = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("#556"))
+        self.hLine = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen("#556"))
+        self.plot.addItem(self.vLine, ignoreBounds=True)
+        self.plot.addItem(self.hLine, ignoreBounds=True)
+        self.proxy = pg.SignalProxy(self.plot.scene().sigMouseMoved, rateLimit=60, slot=self._mouse_moved)
 
     def on_snapshot(self, snap: dict) -> None:
         mid = snap.get("mid") or snap.get("price")
@@ -122,26 +171,19 @@ class _ExecutionChart(QtWidgets.QWidget):
     def _draw_candles(self) -> None:
         if not self.candles:
             return
-        xs = []
-        ys = []
-        brushes = []
-        pens = []
+        data = []
         for i, c in enumerate(self.candles[-300:]):
-            x = i
-            o = c["open"]
-            h = c["high"]
-            l = c["low"]
-            cl = c["close"]
-            color = QtGui.QColor("#12d8fa") if cl >= o else QtGui.QColor("#ff5f56")
-            pens.append(pg.mkPen(color))
-            brushes.append(pg.mkBrush(color))
-            xs.append(x)
-            ys.append((o, h, l, cl))
-        # Use error bars style (simple vertical line + body)
-        spots = []
-        for i, (x, (o, h, l, cl)) in enumerate(zip(xs, ys)):
-            spots.append({"pos": (x, cl), "brush": brushes[i], "pen": pens[i], "size": 8})
-        self.fill_scatter.setData(spots)
+            data.append((i, c["open"], c["high"], c["low"], c["close"]))
+        self.candle_item.setData(data)
+
+    def _mouse_moved(self, evt) -> None:
+        pos = evt[0]
+        if self.plot.sceneBoundingRect().contains(pos):
+            mousePoint = self.plot.plotItem.vb.mapSceneToView(pos)
+            x = mousePoint.x()
+            y = mousePoint.y()
+            self.vLine.setPos(x)
+            self.hLine.setPos(y)
 
 
 class InstitutionalMainWindow(QtWidgets.QMainWindow):

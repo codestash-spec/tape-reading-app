@@ -1,0 +1,17 @@
+{
+  "default": [
+    "BTCUSDT",
+    "XAUUSD",
+    "GC",
+    "ETHUSDT"
+  ],
+  "crypto": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "futures": [
+    "GC",
+    "ES",
+    "NQ"
+  ]
+}

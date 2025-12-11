@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui, QtCore
 
 from ui.event_bridge import EventBridge
 
@@ -8,13 +8,50 @@ from ui.event_bridge import EventBridge
 class LiquidityMapPanel(QtWidgets.QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.label = QtWidgets.QLabel("Liquidity Map")
-        layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(self.label)
-        self.setLayout(layout)
+        self.resting = {}
+        self.setMinimumHeight(120)
+        self._pending = None
+        self._timer = QtCore.QTimer(self)
+        self._timer.setInterval(int(1000 / 60))
+        self._timer.timeout.connect(self.update)
+        self._timer.start()
 
     def connect_bridge(self, bridge: EventBridge) -> None:
         bridge.bus.subscribe("liquidity_update", self._on_liq)
 
     def _on_liq(self, evt):
-        self.label.setText(f"Liquidity levels={len(evt.payload.get('resting', {}))}")
+        self._pending = evt.payload
+        self.resting = evt.payload.get("resting", {})
+        self.update()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        if not self.resting:
+            return
+        painter = QtGui.QPainter(self)
+        try:
+            painter.fillRect(self.rect(), QtGui.QColor("#0f1b2b"))
+            w = self.width()
+            h = self.height()
+            prices = sorted(self.resting.keys(), reverse=True)
+            bar_h = max(4, h // max(1, len(prices)))
+            max_liq = max(max(v.get("bid", 0.0), v.get("ask", 0.0)) for v in self.resting.values()) or 1.0
+            y = 0
+            for p in prices:
+                entry = self.resting[p]
+                bid = entry.get("bid", 0.0)
+                ask = entry.get("ask", 0.0)
+                bid_w = int((bid / max_liq) * (w / 2))
+                ask_w = int((ask / max_liq) * (w / 2))
+                bid_rect = QtCore.QRect((w // 2) - bid_w, y, bid_w, bar_h - 1)
+                ask_rect = QtCore.QRect(w // 2, y, ask_w, bar_h - 1)
+                bid_color = QtGui.QColor(18, 216, 250)
+                ask_color = QtGui.QColor(255, 95, 86)
+                bid_color.setAlphaF(0.1 + 0.9 * (bid / max_liq))
+                ask_color.setAlphaF(0.1 + 0.9 * (ask / max_liq))
+                painter.fillRect(bid_rect, bid_color)
+                painter.fillRect(ask_rect, ask_color)
+                painter.setPen(QtGui.QPen(QtGui.QColor("#8aa0b4")))
+                painter.drawText(0, y, w, bar_h, QtCore.Qt.AlignCenter, f"{p}")
+                y += bar_h
+        finally:
+            painter.end()

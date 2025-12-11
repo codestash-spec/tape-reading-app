@@ -36,6 +36,7 @@ class EventBridge(QtCore.QObject):
     riskStatusUpdated = QtCore.Signal(dict)
     metricsUpdated = QtCore.Signal(dict)
     logReceived = QtCore.Signal(str)
+    alertReceived = QtCore.Signal(dict)
 
     def __init__(self, bus: EventBus, parent: Optional[QtCore.QObject] = None) -> None:
         super().__init__(parent)
@@ -140,6 +141,8 @@ class EventBridge(QtCore.QObject):
         elif et == "log":
             msg = payload.get("message") or payload.get("msg") or str(payload)
             self.logReceived.emit(msg)
+        elif et == "alert_event":
+            self.alertReceived.emit(payload)
 
     def _attach_logging(self) -> None:
         if self._logger_handler:

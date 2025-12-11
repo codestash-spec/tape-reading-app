@@ -24,6 +24,10 @@ class DeltaPanel(QtWidgets.QWidget):
         self.mode_cvd = True
 
         self.plot = pg.PlotWidget(background=brand.BG_DARK)
+        try:
+            self.plot.setViewport(QtWidgets.QOpenGLWidget())
+        except Exception:
+            pass
         self.plot.showGrid(x=True, y=True, alpha=0.3)
         self.curve_stream = self.plot.plot(pen=pg.mkPen(brand.ACCENT, width=1.5))
         self.curve_cvd = self.plot.plot(pen=pg.mkPen("#7cffc4", width=2))

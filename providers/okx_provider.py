@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import random
 import time
+import asyncio
+import json
+import logging
+import threading
 from datetime import datetime, timezone
 from typing import Any
 
@@ -11,13 +15,32 @@ from models.market_event import MarketEvent
 
 class OKXProvider(ProviderBase):
     """
-    Mock OKX depth provider. Replace with real websocket when available.
+    OKX depth/trade provider; falls back to mock feed if websockets unavailable.
     """
 
+    def __init__(self, event_bus, settings, symbol) -> None:
+        super().__init__(event_bus, settings, symbol)
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._ws_tasks = []
+
     def start(self) -> None:
-        self._start_thread(self._run)
+        try:
+            import websockets  # type: ignore
+
+            self._loop = asyncio.new_event_loop()
+            t = threading.Thread(target=self._run_ws, daemon=True)
+            t.start()
+            self._thread = t
+        except Exception as exc:
+            logging.getLogger(__name__).warning("OKX websockets unavailable (%s); falling back to mock feed", exc)
+            self._start_thread(self._run_mock)
 
     def stop(self) -> None:
+        self._running = False
+        if self._loop:
+            for task in self._ws_tasks:
+                task.cancel()
+            self._loop.call_soon_threadsafe(self._loop.stop)
         self._stop_thread()
 
     def subscribe_dom(self) -> None:
@@ -29,7 +52,70 @@ class OKXProvider(ProviderBase):
     def subscribe_quotes(self) -> None:
         return
 
-    def _run(self) -> None:
+    async def _ws_consume(self, url: str, msg: dict) -> None:
+        import websockets  # type: ignore
+
+        while self._running:
+            try:
+                async with websockets.connect(url, ping_interval=20) as ws:
+                    await ws.send(json.dumps(msg))
+                    async for raw in ws:
+                        try:
+                            data = json.loads(raw)
+                        except Exception:
+                            continue
+                        arg = data.get("arg", {})
+                        channel = arg.get("channel")
+                        if channel == "books5" or channel == "books50-l2-tbt":
+                            self._handle_depth(data)
+                        elif channel == "trades":
+                            self._handle_trade(data)
+            except Exception as exc:
+                logging.getLogger(__name__).warning("OKX WS reconnecting after error: %s", exc)
+                await asyncio.sleep(1.0)
+
+    def _run_ws(self) -> None:
+        if not self._loop:
+            return
+        asyncio.set_event_loop(self._loop)
+        self._running = True
+        stream = self.symbol.upper()
+        depth_msg = {"op": "subscribe", "args": [{"channel": "books5", "instId": stream}]}
+        trade_msg = {"op": "subscribe", "args": [{"channel": "trades", "instId": stream}]}
+        depth_url = "wss://ws.okx.com:8443/ws/v5/public"
+        self._ws_tasks = [
+            self._loop.create_task(self._ws_consume(depth_url, depth_msg)),
+            self._loop.create_task(self._ws_consume(depth_url, trade_msg)),
+        ]
+        self._loop.run_forever()
+
+    def _handle_depth(self, data: dict) -> None:
+        books = data.get("data", [])
+        if not books:
+            return
+        book = books[0]
+        bids = book.get("bids", [])
+        asks = book.get("asks", [])
+        dom = []
+        for price, size, *_ in bids:
+            dom.append({"price": float(price), "bid_size": float(size), "ask_size": 0.0})
+        for price, size, *_ in asks:
+            dom.append({"price": float(price), "bid_size": 0.0, "ask_size": float(size)})
+        evt = self.normalize_dom({"dom": dom})
+        self.bus.publish(evt)
+
+    def _handle_trade(self, data: dict) -> None:
+        trades = data.get("data", [])
+        if not trades:
+            return
+        tr = trades[0]
+        price = float(tr.get("px", 0))
+        size = float(tr.get("sz", 0))
+        side = tr.get("side", "buy")
+        evt = self.normalize_trade({"price": price, "size": size, "side": side})
+        self.bus.publish(evt)
+
+    def _run_mock(self) -> None:
         depth = int(self.settings.get("dom_depth", 20) or 20)
         while self._running:
             mid = 100 + random.random()

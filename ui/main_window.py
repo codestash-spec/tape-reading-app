@@ -249,8 +249,8 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
 
         self.addToolBar(QtCore.Qt.TopToolBarArea, toolbar)
         # hotkeys
-        QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+1"), self, activated=lambda: self._cycle_watch(-1))
-        QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+2"), self, activated=lambda: self._cycle_watch(1))
+        QtGui.QShortcut(QtGui.QKeySequence("Ctrl+1"), self, activated=lambda: self._cycle_watch(-1))
+        QtGui.QShortcut(QtGui.QKeySequence("Ctrl+2"), self, activated=lambda: self._cycle_watch(1))
 
     def _on_mode_change(self, mode: str) -> None:
         self.status_widget.mode_label.setText(f"Mode: {mode}")
@@ -306,6 +306,8 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         # rebuild provider manager with new symbol
         if self.provider_manager:
             self.provider_manager.stop()
+        if hasattr(self.market_watch, "disconnect_bridge"):
+            self.market_watch.disconnect_bridge()
         cfg = dict(self.pm_settings)
         cfg["market_symbol"] = symbol
         cfg["symbols"] = [symbol]
@@ -314,6 +316,8 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         self.provider_manager.auto_start()
         self.bridge.stop()
         self.bridge.start()
+        if hasattr(self.market_watch, "connect_bridge"):
+            self.market_watch.connect_bridge(self.bridge)
         self.status_widget.conn_label.setText(f"Conn: {self.provider_manager.active_name}")
         self.statusBar().showMessage(f"[MarketWatch] User selected {symbol} (provider={self.provider_manager.active_name})", 3000)
 

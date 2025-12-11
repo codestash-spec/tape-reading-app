@@ -72,8 +72,34 @@ class EventBus:
             return
         if self.allowed_sources is not None:
             src = getattr(event, "source", None)
-            if src not in self.allowed_sources:
-                logging.getLogger(__name__).error("[Error][GhostEvent] Event received from provider that should be DEAD source=%s allowed=%s", src, self.allowed_sources)
+            src_key = str(src).lower() if src is not None else ""
+            allowed = {s.lower() for s in self.allowed_sources}
+            # Allow internal engines to bypass provider filter
+            internal_sources = {
+                "",
+                "microstructure",
+                "liquidity",
+                "liquidity_map",
+                "volume_profile",
+                "volatility",
+                "regime",
+                "regime_engine",
+                "strategy",
+                "execution",
+                "router",
+                "risk",
+                "ui",
+                "tape",
+                "delta",
+                "footprint",
+                "sim",
+            }
+            if src_key not in allowed and src_key not in internal_sources:
+                logging.getLogger(__name__).error(
+                    "[Error][GhostEvent] Event received from provider that should be DEAD source=%s allowed=%s",
+                    src,
+                    self.allowed_sources,
+                )
                 return
         self._queue.put_nowait(event)
 

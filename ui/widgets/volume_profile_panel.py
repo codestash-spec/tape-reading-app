@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui, QtCore
 
 from ui.event_bridge import EventBridge
 
@@ -8,13 +8,51 @@ from ui.event_bridge import EventBridge
 class VolumeProfilePanel(QtWidgets.QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.label = QtWidgets.QLabel("Volume Profile")
-        layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(self.label)
-        self.setLayout(layout)
+        self.profile = {}
+        self.poc = None
+        self.value_area = []
+        self.setMinimumHeight(120)
+        self._pending = None
+        self._throttle = QtCore.QTimer(self)
+        self._throttle.setInterval(int(1000 / 60))
+        self._throttle.timeout.connect(self.update)
+        self._throttle.start()
 
     def connect_bridge(self, bridge: EventBridge) -> None:
         bridge.bus.subscribe("volume_profile_update", self._on_profile)
 
     def _on_profile(self, evt):
-        self.label.setText(f"POC={evt.payload.get('poc')}")
+        self._pending = evt.payload
+        self.profile = evt.payload.get("histogram", {})
+        self.poc = evt.payload.get("poc")
+        self.value_area = evt.payload.get("value_area", [])
+        self.update()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        if not self.profile:
+            return
+        painter = QtGui.QPainter(self)
+        try:
+            painter.fillRect(self.rect(), QtGui.QColor("#0f1b2b"))
+            w = self.width()
+            h = self.height()
+            max_vol = max(self.profile.values()) if self.profile else 1.0
+            sorted_prices = sorted(self.profile.keys())
+            bar_h = max(4, h // max(1, len(sorted_prices)))
+            y = h
+            for price in reversed(sorted_prices):
+                vol = self.profile[price]
+                width = int((vol / max_vol) * (w * 0.9))
+                rect = QtCore.QRect(0, y - bar_h, width, bar_h - 1)
+                color = QtGui.QColor(18, 216, 250)
+                color.setAlphaF(0.15 + 0.75 * (vol / max_vol))
+                painter.fillRect(rect, color)
+                if price == self.poc:
+                    painter.setPen(QtGui.QPen(QtGui.QColor("#ffd700"), 2))
+                    painter.drawLine(rect.right(), y - bar_h, rect.right(), y)
+                if price in self.value_area:
+                    painter.setPen(QtGui.QPen(QtGui.QColor("#7cffc4"), 1, QtCore.Qt.DashLine))
+                    painter.drawRect(rect)
+                y -= bar_h
+        finally:
+            painter.end()

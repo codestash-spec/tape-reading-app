@@ -15,7 +15,11 @@ class AlertsPanel(QtWidgets.QWidget):
         self.setLayout(layout)
 
     def connect_bridge(self, bridge: EventBridge) -> None:
-        bridge.bus.subscribe("alert_event", self._on_alert)
+        bridge.alertReceived.connect(self._on_alert_payload)
+        bridge.bus.subscribe("alert_event", self._on_alert_evt)
 
-    def _on_alert(self, evt):
-        self.view.append(str(evt.payload))
+    def _on_alert_evt(self, evt):
+        self._on_alert_payload(evt.payload)
+
+    def _on_alert_payload(self, payload):
+        self.view.append(str(payload))

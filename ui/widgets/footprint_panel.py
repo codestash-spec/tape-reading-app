@@ -101,25 +101,41 @@ class _FootprintCanvas(QtWidgets.QWidget):
 class FootprintPanel(QtWidgets.QWidget):
     """
     Footprint with buy/sell, delta e imbalance por nível de preço.
+    Throttled updates (~60 FPS) and drag-pause for smoothness.
     """
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.model = FootprintModel()
         self.canvas = _FootprintCanvas(self.model)
+        self.canvas.setMinimumHeight(140)
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.canvas)
         self.setLayout(layout)
+        self._pending: Dict[str, Any] | None = None
+        self._throttle = QtCore.QTimer(self)
+        self._throttle.setInterval(int(1000 / 60))
+        self._throttle.timeout.connect(self._flush)
+        self._throttle.start()
 
     def connect_bridge(self, bridge: EventBridge) -> None:
-        bridge.footprintUpdated.connect(self.update_footprint)
-        bridge.microstructureUpdated.connect(self.update_from_snapshot)
+        bridge.footprintUpdated.connect(self.queue_footprint)
+        bridge.microstructureUpdated.connect(self.queue_from_snapshot)
 
-    def update_footprint(self, fp: Dict[str, Any]) -> None:
-        self.model.update(fp)
+    def queue_footprint(self, fp: Dict[str, Any]) -> None:
+        self._pending = fp
 
-    def update_from_snapshot(self, snapshot: Dict[str, Any]) -> None:
+    def queue_from_snapshot(self, snapshot: Dict[str, Any]) -> None:
         fp = snapshot.get("footprint") or {}
         if fp:
-            self.update_footprint(fp)
+            self._pending = fp
+
+    def _flush(self) -> None:
+        from ui.widgets.dom_panel import UI_UPDATE_PAUSED
+
+        if UI_UPDATE_PAUSED or self._pending is None:
+            return
+        data = self._pending
+        self._pending = None
+        self.model.update(data)

@@ -14,6 +14,13 @@ from core.config import load_settings
 from core.event_bus import EventBus
 from core.logging import configure_logging
 from engines.microstructure.engine import MicrostructureEngine
+from engines.liquidity_map.engine import LiquidityMapEngine
+from engines.volume_profile.engine import VolumeProfileEngine
+from engines.volatility.engine import VolatilityEngine
+from engines.regime.engine import RegimeEngine
+from engines.detectors.spoofing_detector import SpoofingDetector
+from engines.detectors.iceberg_detector import IcebergDetector
+from engines.detectors.large_trade_detector import LargeTradeDetector
 from models.market_event import MarketEvent
 from models.order import OrderRequest, OrderSide, OrderType
 from risk.engine import RiskEngine
@@ -70,6 +77,15 @@ def main(argv: List[str] | None = None) -> int:
     # Engines and strategy
     micro = MicrostructureEngine(bus, symbols)
     micro.start()
+    # Institutional engines
+    liq_map_engine = LiquidityMapEngine(bus)
+    vol_profile_engine = VolumeProfileEngine(bus)
+    vol_engine = VolatilityEngine(bus)
+    regime_engine = RegimeEngine(bus)
+    spoof_detector = SpoofingDetector(bus)
+    iceberg_detector = IcebergDetector(bus)
+    large_trade_detector = LargeTradeDetector(bus)
+
     strategist = StrategyOrchestrator(bus, symbols)
     strategist.start()
 

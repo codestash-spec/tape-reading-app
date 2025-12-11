@@ -93,9 +93,13 @@ class DomDelegate(QtWidgets.QStyledItemDelegate):
         return max(vals) if vals else 1.0
 
 
+UI_UPDATE_PAUSED = False
+
+
 class DomPanel(QtWidgets.QWidget):
     """
     DOM ladder with multiple levels, heatmap and last-price highlight.
+    Includes throttling (60 FPS) and pause during drag/resize.
     """
 
     def __init__(self, parent=None) -> None:
@@ -108,23 +112,55 @@ class DomPanel(QtWidgets.QWidget):
         self.view.horizontalHeader().setStretchLastSection(True)
         self.view.setAlternatingRowColors(True)
         self.view.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        self.view.viewport().installEventFilter(self)
+        # heatmap canvas
+        self.heatmap = QtWidgets.QLabel()
+        self.heatmap.setMinimumHeight(80)
+        self.heatmap.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        self.heatmap.setStyleSheet("background-color: #0f1b2b; border: 1px solid #1f2b3a;")
 
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.view)
+        layout.addWidget(self.heatmap)
         self.setLayout(layout)
 
-    def connect_bridge(self, bridge: EventBridge) -> None:
-        bridge.domUpdated.connect(self.update_dom)
+        self._pending_payload: Dict[str, Any] | None = None
+        self._throttle = QtCore.QTimer(self)
+        self._throttle.setInterval(int(1000 / 60))  # ~60 FPS
+        self._throttle.timeout.connect(self._flush)
+        self._throttle.start()
 
-    def update_dom(self, payload: Dict[str, Any]) -> None:
-        ladder_raw = payload.get("ladder") or payload.get("levels") or []
+    def eventFilter(self, obj, event):
+        global UI_UPDATE_PAUSED
+        if event.type() in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseMove):
+            UI_UPDATE_PAUSED = True
+        elif event.type() == QtCore.QEvent.MouseButtonRelease:
+            UI_UPDATE_PAUSED = False
+        return super().eventFilter(obj, event)
+
+    def connect_bridge(self, bridge: EventBridge) -> None:
+        bridge.domUpdated.connect(self.queue_dom)
+
+    def queue_dom(self, payload: Dict[str, Any]) -> None:
+        self._pending_payload = payload
+
+    def _flush(self) -> None:
+        global UI_UPDATE_PAUSED
+        if UI_UPDATE_PAUSED or self._pending_payload is None:
+            return
+        payload = self._pending_payload
+        self._pending_payload = None
+        ladder_raw = payload.get("ladder") or payload.get("levels") or payload.get("dom") or []
         last_price = None
-        if "last" in payload:
-            try:
-                last_price = float(payload.get("last"))
-            except Exception:
-                last_price = None
+        if "last" in payload or "mid" in payload or "price" in payload:
+            for key in ("last", "mid", "price"):
+                try:
+                    if key in payload:
+                        last_price = float(payload.get(key))
+                        break
+                except Exception:
+                    continue
         rows: List[Tuple[float, float, float, float]] = []
 
         def add_row(price, bid, ask):
@@ -150,5 +186,32 @@ class DomPanel(QtWidgets.QWidget):
                 elif isinstance(level, (list, tuple)) and len(level) >= 3:
                     add_row(level[0], level[1], level[2])
 
-        rows = sorted(rows, key=lambda r: r[0], reverse=True)[:50]
+        rows = sorted(rows, key=lambda r: r[0], reverse=True)[:100]
         self.model.update_rows(rows, last_price)
+        self._draw_heatmap(rows)
+
+    def _draw_heatmap(self, rows: List[Tuple[float, float, float, float]]) -> None:
+        if not rows:
+            return
+        h = self.heatmap.height() or 120
+        w = self.heatmap.width() or 300
+        pix = QtGui.QPixmap(w, h)
+        pix.fill(QtGui.QColor(0, 0, 0, 0))
+        painter = QtGui.QPainter(pix)
+        painter.fillRect(pix.rect(), QtGui.QColor(15, 27, 43))
+        max_size = max(max(r[1], r[2]) for r in rows) or 1.0
+        row_h = max(2, h // len(rows))
+        for i, (price, bid, ask, _) in enumerate(rows):
+            y = i * row_h
+            bid_int = min(1.0, bid / max_size)
+            ask_int = min(1.0, ask / max_size)
+            bid_rect = QtCore.QRect(0, y, w // 2, row_h)
+            ask_rect = QtCore.QRect(w // 2, y, w // 2, row_h)
+            bid_color = QtGui.QColor(18, 216, 250)
+            bid_color.setAlphaF(0.1 + 0.9 * bid_int)
+            ask_color = QtGui.QColor(255, 95, 86)
+            ask_color.setAlphaF(0.1 + 0.9 * ask_int)
+            painter.fillRect(bid_rect, bid_color)
+            painter.fillRect(ask_rect, ask_color)
+        painter.end()
+        self.heatmap.setPixmap(pix)

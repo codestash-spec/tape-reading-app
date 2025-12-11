@@ -54,7 +54,7 @@ class ProviderManager:
         self.capabilities = {"depth_hint": self.settings.get("ui", {}).get("dom_depth", 20), "instrument_type": None}
         if self.audit_mode:
             self.log.info("[Audit][ProviderStart] provider=%s", name)
-        self.bus.allowed_sources = {name}
+        self.bus.allowed_sources = {name.lower()}
         self._assert_provider_dead(name, threads_before, callbacks_before)
 
     def stop(self) -> None:

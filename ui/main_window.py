@@ -248,6 +248,9 @@ class InstitutionalMainWindow(QtWidgets.QMainWindow):
         if self.provider_manager and cfg.get("provider"):
             self.provider_manager.start(cfg["provider"])
             self.status_widget.conn_label.setText(f"Conn: {cfg['provider']}")
+            # reset event bridge subscriptions to avoid duplicates
+            self.bridge.stop()
+            self.bridge.start()
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self.save_state()

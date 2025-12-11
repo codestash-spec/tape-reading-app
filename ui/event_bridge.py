@@ -60,6 +60,14 @@ class EventBridge(QtCore.QObject):
             self._subscriptions.append(et)
         self._attach_logging()
 
+    def stop(self) -> None:
+        for et in self._subscriptions:
+            self.bus.unsubscribe(et, self._on_event)
+        self._subscriptions.clear()
+        if self._logger_handler:
+            logging.getLogger().removeHandler(self._logger_handler)
+            self._logger_handler = None
+
     def _sanitize(self, obj: Any) -> Any:
         if isinstance(obj, dict):
             return {str(k): self._sanitize(v) for k, v in obj.items()}
